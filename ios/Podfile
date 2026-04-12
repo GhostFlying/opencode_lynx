@@ -1,0 +1,83 @@
+platform :ios, '12.0'
+
+source 'https://cdn.cocoapods.org/'
+
+use_modular_headers!
+
+install! 'cocoapods',
+:generate_multiple_pod_projects => true,
+:incremental_installation => true,
+:deterministic_uuids => true
+
+inhibit_all_warnings!
+
+def lynx_kit
+  pod 'Lynx', '3.7.0', :subspecs => [
+    'Framework',
+    'ReleaseResource'
+  ]
+
+  pod 'PrimJS', '3.7.0', :subspecs => ['quickjs', 'napi']
+
+  pod 'LynxService', '3.7.0', :subspecs => [
+  'Image',
+  'Log',
+  'Http',
+  'Devtool'
+  ]
+
+  pod 'LynxDevtool', '3.7.0', :subspecs => [
+   'Framework',
+  ]
+
+  pod 'XElement', '3.7.0'
+
+  pod 'DebugRouter/MessageTransceiverEnable', '5.0.15'
+
+  pod 'SDWebImage','5.15.5'
+  pod 'SDWebImageWebPCoder', '0.11.0'
+end
+
+project 'OpenCodeLynx.xcodeproj'
+
+use_frameworks!
+target 'OpenCodeLynx' do
+  lynx_kit
+end
+
+target 'OpenCodeLynxTests' do
+  lynx_kit
+end
+
+target 'OpenCodeLynxUITests' do
+  lynx_kit
+end
+
+post_install do |installer|
+  support_dir = File.join(__dir__, 'Pods', 'Target Support Files', 'LynxServiceAPI')
+  fallback = '"${PODS_TARGET_SRCROOT}"'
+
+  %w[LynxServiceAPI.debug.xcconfig LynxServiceAPI.release.xcconfig].each do |filename|
+    path = File.join(support_dir, filename)
+    next unless File.exist?(path)
+
+    content = File.read(path)
+    next if content.include?(fallback)
+
+    patched = content.gsub(
+      'HEADER_SEARCH_PATHS = $(inherited)',
+      "HEADER_SEARCH_PATHS = $(inherited) #{fallback}"
+    )
+    File.write(path, patched)
+  end
+
+  installer.generated_projects.each do |project|
+    project.save
+  end
+  installer.aggregate_targets.each do |target|
+    user_project = target.user_project
+    next unless user_project
+
+    user_project.save
+  end
+end

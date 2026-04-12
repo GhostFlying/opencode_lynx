@@ -1,0 +1,259 @@
+# Build Instructions
+
+This document is the project-wide build and run guide for this repository.
+
+The repository uses a Lynx app scaffold with a custom container layer. Lynx / ReactLynx app code, Android host code, and iOS host code all build from the repository root.
+
+## Scope
+
+- Lynx / ReactLynx app code lives under `./src`
+- Android host code lives under `./android`
+- iOS host code lives under `./ios`
+- package management and app scripts live in the root `./package.json`
+- build, test, and platform run commands should be executed from the repository root
+
+## Core rules
+
+1. Before running project commands, initialize a Python virtual environment with `uv venv`.
+2. Use `pnpm` as the default package manager from the repository root.
+3. Before running build, test, or platform run commands, run `pnpm install` from the repository root.
+4. Do not assume dependencies or host-side tooling already exist in a fresh checkout.
+5. Use Node.js `^22 || ^24` to match the root `package.json`.
+
+## Environment preparation
+
+From the repository root:
+
+```bash
+uv venv
+uv pip install fb-idb  # optional, only when simulator automation needs idb
+pnpm install
+```
+
+## Quick start
+
+For a normal validation pass from the repository root:
+
+```bash
+uv venv
+pnpm install
+pnpm run test:ci
+pnpm build
+```
+
+## Common commands
+
+Run these after `uv venv` and `pnpm install`:
+
+```bash
+pnpm test
+pnpm run test:ci
+pnpm build
+pnpm run:ios
+pnpm run:android
+```
+
+Optional native smoke commands:
+
+```bash
+pnpm run gate:ios-deeplink-smoke
+pnpm run gate:ios-smoke
+pnpm run gate:android-deeplink-smoke
+pnpm run gate:android-smoke
+```
+
+Use those optional smoke commands when a change affects native host behavior, startup routing, or deeplink handling.
+
+## Maintainer-only local-gate note
+
+The repository still contains `scripts/local-gate`, but it is a maintainer-only experimental WIP smoke orchestrator.
+
+It is not part of the public contribution contract, and it does not currently implement governance, warning-budget, or diagnostics workflows.
+
+For current usage, limits, and stage map details, see `./development/local-gate-wip.md`.
+
+## Ruby and CocoaPods
+
+The repository pins a preferred Ruby version in `./.ruby-version`.
+
+If iOS commands fail because the current Ruby version does not satisfy project requirements:
+
+1. ask whether to resolve it with `rbenv`
+2. if approved, install `rbenv` and `ruby-build`
+3. install the version from `./.ruby-version`
+4. run `rbenv local <version>`
+5. verify with `ruby -v`
+
+Typical setup flow after approval:
+
+```bash
+brew install rbenv ruby-build
+rbenv install 3.2.10
+rbenv local 3.2.10
+ruby -v
+```
+
+## Validation environment troubleshooting
+
+### Quick preflight checklist
+
+Before spending time on a failing validation run, check these first from the repository root:
+
+```bash
+uv venv
+pnpm install
+node -v
+xcrun simctl list devices booted
+ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+"$ANDROID_HOME/platform-tools/adb" start-server
+"$ANDROID_HOME/platform-tools/adb" devices -l
+"$ANDROID_HOME/emulator/emulator" -list-avds
+```
+
+If any of those fail, fix the environment first instead of debugging app logic.
+
+### Node.js engine mismatch (`^22 || ^24` required)
+
+Observed symptom in this repo:
+
+- `pnpm test`, `pnpm run test:ci`, or targeted Vitest runs fail under Node `v18.x`
+- error text includes:
+
+```txt
+The requested module 'node:util' does not provide an export named 'styleText'
+```
+
+Recommended fix:
+
+1. switch your active Node version to `22.x` or `24.x`
+2. rerun `pnpm install`
+3. retry the test/build command
+
+### iOS smoke verification: rebuild bundle assets before `xcodebuild`
+
+If you changed files under `src/**`, rebuild the Lynx bundles before rerunning iOS smoke:
+
+```bash
+pnpm build
+pnpm run gate:ios-smoke
+```
+
+Do not skip the build step before iOS smoke when page content changed.
+
+### `pnpm run:ios` strict launch verification
+
+This repository wraps the iOS build with a strict verification step in `scripts/run-ios-strict.mjs`.
+
+Current behavior:
+
+1. build Lynx bundles via `pnpm build`
+2. run `pod install`
+3. build the Xcode project via `xcodebuild`
+4. find or boot a simulator
+5. install and launch the app via `xcrun simctl`
+6. return non-zero if launch verification fails
+
+If `pnpm run:ios` fails after build, check these first:
+
+- a simulator is booted
+- the built app is installed in that simulator
+- the effective iOS bundle identifier matches the Xcode target value
+
+Useful manual checks:
+
+```bash
+xcrun simctl list devices booted
+xcrun simctl listapps booted | grep -n "OpenCodeLynx"
+```
+
+### iOS simulator and `xcodebuild` notes
+
+Useful preflight:
+
+```bash
+xcodebuild -showdestinations -workspace ios/OpenCodeLynx.xcworkspace -scheme OpenCodeLynxUITests
+xcrun simctl list devices booted
+```
+
+What has been useful in this repo:
+
+- check simulator boot state before blaming app code
+- prefer an explicit simulator destination string such as `platform=iOS Simulator,name=iPhone 16`
+- `xcodebuild` logs are noisy and often include unrelated Pod deployment-target warnings
+- use the targeted test-case lines and final `** TEST SUCCEEDED **` / `** TEST FAILED **` markers as authoritative pass/fail signals
+
+### Android SDK discovery and emulator preflight
+
+This repo cannot assume Android tools are already on `PATH`.
+
+Use `ANDROID_HOME` first:
+
+```bash
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+export PATH="$ANDROID_HOME/platform-tools:$PATH"
+"$ANDROID_HOME/emulator/emulator" -list-avds
+"$ANDROID_HOME/platform-tools/adb" start-server
+"$ANDROID_HOME/platform-tools/adb" devices -l
+```
+
+If no device is connected, launch the known AVD and wait for it:
+
+```bash
+"$ANDROID_HOME/emulator/emulator" -avd opencode_api34 -no-snapshot-load -netdelay none -netspeed full
+"$ANDROID_HOME/platform-tools/adb" wait-for-device
+"$ANDROID_HOME/platform-tools/adb" devices -l
+```
+
+### Android smoke command order
+
+For smoke changes that touch Lynx pages or native Android test code, this order is the most reliable:
+
+```bash
+uv venv
+pnpm install
+pnpm build
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+"$ANDROID_HOME/platform-tools/adb" start-server
+"$ANDROID_HOME/platform-tools/adb" wait-for-device
+pnpm run gate:android-smoke
+```
+
+### LSP and tooling gaps
+
+These are known environment limitations, not necessarily code defects:
+
+- JSON LSP diagnostics may be unavailable because `biome` is not installed
+- Markdown LSP diagnostics are not configured in this workspace
+- Kotlin LSP may time out during initialization
+- Swift LSP may report module-import failures even when `xcodebuild` succeeds
+
+Practical rule:
+
+- when LSP is unavailable, use the platform-native verifier for the affected area instead of assuming the file is broken
+
+## Recommended verification order
+
+When validating project changes:
+
+1. `uv venv`
+2. `pnpm install`
+3. `pnpm run test:ci`
+4. `pnpm build`
+5. if native behavior changed, run the relevant optional smoke commands
+
+## Common mistakes to avoid
+
+- running project commands before `uv venv`
+- running tests or builds before `pnpm install`
+- mixing package managers casually in the same scaffold
+- running app commands from anywhere other than the repository root
+- assuming copied native assets are already up to date without rebuilding
+- trying to resolve Ruby version mismatches ad hoc instead of checking `./.ruby-version`
+
+## Related docs
+
+- `./contribution-guide.md`
+- `./lynx-vs-web.md`
+- `./opencode-mobile-client-reference.md`
+- `./development/local-gate-wip.md`
+- `../AGENTS.md`

@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "skills": {
+    "lynx-debug-info-remapping": {
+      "source": "lynx-community/skills",
+      "sourceType": "github",
+      "computedHash": "18c7c5252eb29aaf8f3e810d1cad7fa2cf2a93926ab3b87470521d86abc2455e"
+    },
+    "lynx-devtool": {
+      "source": "lynx-community/skills",
+      "sourceType": "github",
+      "computedHash": "6d420221b0fed4852cbff5f11dbfd90ac292d906b5ae4e3e6a3a7e0fa1e8a7a7"
+    },
+    "lynx-typescript": {
+      "source": "lynx-community/skills",
+      "sourceType": "github",
+      "computedHash": "15576a4f45dc2a117b54fd34e50649133ae5508a8d3544ca0d700d836ae5b3c8"
+    },
+    "reactlynx-best-practices": {
+      "source": "lynx-community/skills",
+      "sourceType": "github",
+      "computedHash": "b31d4d49de0d13524fbb8e9375f54374818737da441f170cd3785eee00545f36"
+    },
+    "trace-analysis": {
+      "source": "lynx-community/skills",
+      "sourceType": "github",
+      "computedHash": "e14395ebff8bcf9cbd1532b71389d8e7c9b3acde720c42c47067aee9b319d0f7"
+    }
+  }
+}

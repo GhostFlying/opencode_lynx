@@ -1,0 +1,232 @@
+package com.opencode.lynx
+
+import android.app.Activity
+import android.graphics.Color
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
+import android.widget.FrameLayout
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import com.lynx.tasm.LynxView
+import com.lynx.tasm.LynxViewBuilder
+import com.lynx.tasm.behavior.Behavior
+import com.lynx.tasm.behavior.LynxContext
+import com.lynx.tasm.behavior.ui.LynxUI
+import org.json.JSONObject
+import java.net.URLDecoder
+import java.util.UUID
+
+/**
+ * Activity that hosts a LynxView.
+ * Receives a "scheme" extra with format: hybrid://lynxview?bundle=...&route_params=...
+ *
+ * globalProps contract:
+ *   - routeParams: parsed JSON object from route_params query value
+ *   - queryItems: { key: value } dict of all URL query parameters
+ *   - containerID: unique UUID per page
+ *   - safeAreaInsets: host-derived { top, right, bottom, left } inset values
+ */
+class OpenCodeLynxActivity : Activity() {
+    private var lynxView: LynxView? = null
+    private var pendingBundleName: String? = null
+    private var hasRenderedTemplate = false
+    private var baseGlobalProps: MutableMap<String, Any> = mutableMapOf()
+    private var lastSafeAreaInsets = SafeAreaInsets()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        OpenCodeActivityStack.push(this)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+
+        val scheme = intent?.getStringExtra("scheme") ?: ""
+        val parsed = parseScheme(scheme)
+        pendingBundleName = parsed.bundleName
+        baseGlobalProps = parsed.globalProps.toMutableMap()
+
+        val builder = LynxViewBuilder()
+        builder.setTemplateProvider(BuiltinTemplateProvider(applicationContext))
+        builder.registerModule(OpenCodeBridgeModule.NAME, OpenCodeBridgeModule::class.java)
+        builder.addBehavior(object : Behavior("input", false) {
+            override fun createUI(context: LynxContext?): LynxUI<*>? {
+                return LynxInputComponent(context)
+            }
+        })
+        builder.addBehavior(object : Behavior("x-liquid-glass", false) {
+            override fun createUI(context: LynxContext?): LynxUI<*>? {
+                return LynxLiquidGlassComponent(context)
+            }
+        })
+        builder.addBehavior(object : Behavior("x-native-tabbar", false) {
+            override fun createUI(context: LynxContext?): LynxUI<*>? {
+                return LynxNativeTabbarComponent(context)
+            }
+        })
+
+        val lv = LynxView(this, builder)
+        lynxView = lv
+
+        val container = FrameLayout(this)
+        container.layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        container.addView(lv, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        setContentView(container)
+        ViewCompat.setOnApplyWindowInsetsListener(container) { _, windowInsets ->
+            handleWindowInsets(windowInsets)
+            windowInsets
+        }
+        ViewCompat.requestApplyInsets(container)
+    }
+
+    override fun onDestroy() {
+        lynxView?.destroy()
+        OpenCodeActivityStack.remove(this)
+        super.onDestroy()
+    }
+
+    private data class ParsedScheme(
+        val bundleName: String,
+        val globalProps: Map<String, Any>,
+    )
+
+    private data class SafeAreaInsets(
+        val top: Int = 0,
+        val right: Int = 0,
+        val bottom: Int = 0,
+        val left: Int = 0,
+    )
+
+    private fun handleWindowInsets(windowInsets: WindowInsetsCompat) {
+        val insets = windowInsets.getInsets(
+            WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+        )
+        val safeAreaInsets = SafeAreaInsets(
+            top = insets.top,
+            right = insets.right,
+            bottom = insets.bottom,
+            left = insets.left,
+        )
+        if (safeAreaInsets == lastSafeAreaInsets && hasRenderedTemplate) {
+            return
+        }
+        lastSafeAreaInsets = safeAreaInsets
+
+        val globalProps = baseGlobalPropsWithSafeArea(safeAreaInsets)
+        val lv = lynxView ?: return
+        if (!hasRenderedTemplate) {
+            val bundleName = pendingBundleName ?: "main.lynx.bundle"
+            hasRenderedTemplate = true
+            lv.renderTemplateUrl(bundleName, globalProps)
+            return
+        }
+        lv.updateGlobalProps(globalProps)
+    }
+
+    private fun baseGlobalPropsWithSafeArea(insets: SafeAreaInsets): Map<String, Any> {
+        val globalProps = baseGlobalProps.toMutableMap()
+        globalProps["safeAreaInsets"] = mapOf(
+            "top" to insets.top,
+            "right" to insets.right,
+            "bottom" to insets.bottom,
+            "left" to insets.left,
+        )
+        return globalProps
+    }
+
+    private fun parseScheme(scheme: String): ParsedScheme {
+        val uri = Uri.parse(scheme)
+        var bundleName = uri.getQueryParameter("bundle") ?: "main.lynx.bundle"
+        if (bundleName.startsWith("./")) {
+            bundleName = bundleName.removePrefix("./")
+        }
+
+        // Collect all query items
+        val queryItems = mutableMapOf<String, String>()
+        uri.queryParameterNames.forEach { key ->
+            queryItems[key] = uri.getQueryParameter(key) ?: ""
+        }
+
+        // Parse route_params as JSON object (URL-decoded then JSON-parsed)
+        val routeParamsRaw = uri.getQueryParameter("route_params")
+        val routeParamsObject: Any? = if (!routeParamsRaw.isNullOrEmpty()) {
+            try {
+                val decoded = URLDecoder.decode(routeParamsRaw, "UTF-8")
+                val json = JSONObject(decoded)
+                // Convert JSONObject to Map for LynxView
+                jsonObjectToMap(json)
+            } catch (_: Exception) {
+                routeParamsRaw
+            }
+        } else null
+
+        val globalProps = mutableMapOf<String, Any>()
+        globalProps["queryItems"] = queryItems
+        globalProps["containerID"] = UUID.randomUUID().toString().lowercase()
+        if (routeParamsObject != null) {
+            globalProps["routeParams"] = routeParamsObject
+        }
+
+        return ParsedScheme(bundleName, globalProps)
+    }
+
+    private fun jsonObjectToMap(json: JSONObject): Map<String, Any> {
+        val map = mutableMapOf<String, Any>()
+        json.keys().forEach { key ->
+            val value = json.get(key)
+            map[key] = when (value) {
+                is JSONObject -> jsonObjectToMap(value)
+                is org.json.JSONArray -> jsonArrayToList(value)
+                JSONObject.NULL -> ""
+                else -> value
+            }
+        }
+        return map
+    }
+
+    private fun jsonArrayToList(arr: org.json.JSONArray): List<Any> {
+        return (0 until arr.length()).map { i ->
+            val value = arr.get(i)
+            when (value) {
+                is JSONObject -> jsonObjectToMap(value)
+                is org.json.JSONArray -> jsonArrayToList(value)
+                JSONObject.NULL -> ""
+                else -> value
+            }
+        }
+    }
+}
+
+/**
+ * Simple activity stack tracker for navigation.close support.
+ */
+object OpenCodeActivityStack {
+    private val stack = mutableListOf<Activity>()
+
+    val topActivity: Activity?
+        get() = synchronized(stack) { stack.lastOrNull() }
+
+    fun push(activity: Activity) {
+        synchronized(stack) { stack.add(activity) }
+    }
+
+    fun remove(activity: Activity) {
+        synchronized(stack) { stack.remove(activity) }
+    }
+}

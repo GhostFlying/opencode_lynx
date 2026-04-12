@@ -1,0 +1,22 @@
+{
+  "platform": "android",
+  "request_invalid": {
+    "ok": false,
+    "status_code": 400,
+    "headers": {},
+    "body": null,
+    "error_code": "invalid_param",
+    "error_message": "Invalid network.request payload"
+  },
+  "sse_open_invalid": {
+    "stream_id": null,
+    "event_name": null,
+    "error_code": "invalid_param",
+    "error_message": "Invalid network.sse.open payload"
+  },
+  "sse_close_invalid": {
+    "closed": false,
+    "error_code": "invalid_param",
+    "error_message": "Invalid network.sse.close payload"
+  }
+}

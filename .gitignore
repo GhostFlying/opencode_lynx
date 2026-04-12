@@ -1,0 +1,58 @@
+# Project
+opencode.json
+package
+lynx-js-docs-mcp-server-*.tgz
+.temp-templates
+.sisyphus
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Toolchain state (session-local agent tooling)
+log/
+tmp/
+.ai/
+.claude/
+.agents/
+.trae/
+.trae-cn/
+.venv/
+.python-version
+
+# JS build / deps
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.log
+*.log.*
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# iOS — Pods and per-user Xcode state
+ios/Pods/
+**/xcuserdata/
+*.xcuserstate
+
+# Generated Lynx bundles (produced by scripts/copy-bundles.mjs)
+ios/LynxResources/*.lynx.bundle
+ios/LynxResources/static/
+ios/OpenCodeLynx/OpenCodeLynx/Resources/Assets/
+android/app/src/main/assets/
+
+# Android build intermediates
+android/**/build/
+
+# Ruby / Bundler
+vendor/bundle/
+.bundle/

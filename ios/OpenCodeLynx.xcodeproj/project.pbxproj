@@ -1,0 +1,910 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		07B2FB684B8D385782138000 /* Pods_OpenCodeLynxUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9AD74935FFBD17E3B3D4E69A /* Pods_OpenCodeLynxUITests.framework */; };
+		903208242ED9629900167236 /* LynxResources in Resources */ = {isa = PBXBuildFile; fileRef = 903208232ED9629900167236 /* LynxResources */; };
+		CEAB8C5202B26CF8F0BE5581 /* Pods_OpenCodeLynx.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4B00F0DF4C89E15C31BC93A3 /* Pods_OpenCodeLynx.framework */; };
+		E1EA18997313C777BCB28C73 /* Pods_OpenCodeLynxTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 34294AA1E3153C7FF24DA29D /* Pods_OpenCodeLynxTests.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		44A4C3072E271D570011A613 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 44B59A7F2DE9041F00A05B89 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 44B59A862DE9041F00A05B89;
+			remoteInfo = OpenCodeLynx;
+		};
+		44B59A992DE9042100A05B89 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 44B59A7F2DE9041F00A05B89 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 44B59A862DE9041F00A05B89;
+			remoteInfo = OpenCodeLynx;
+		};
+		44B59AA32DE9042100A05B89 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 44B59A7F2DE9041F00A05B89 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 44B59A862DE9041F00A05B89;
+			remoteInfo = OpenCodeLynx;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		105D1EA8BB03A87166570D75 /* Pods-OpenCodeLynxTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OpenCodeLynxTests.debug.xcconfig"; path = "Target Support Files/Pods-OpenCodeLynxTests/Pods-OpenCodeLynxTests.debug.xcconfig"; sourceTree = "<group>"; };
+		34294AA1E3153C7FF24DA29D /* Pods_OpenCodeLynxTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_OpenCodeLynxTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		44A4C3032E271D570011A613 /* OpenCodeMethodTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenCodeMethodTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		44B59A872DE9041F00A05B89 /* OpenCodeLynx.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenCodeLynx.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		44B59A982DE9042100A05B89 /* OpenCodeLynxTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenCodeLynxTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		44B59AA22DE9042100A05B89 /* OpenCodeLynxUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenCodeLynxUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4B00F0DF4C89E15C31BC93A3 /* Pods_OpenCodeLynx.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_OpenCodeLynx.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		8CA3C88BC922913EC94B79D5 /* Pods-OpenCodeLynx.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OpenCodeLynx.release.xcconfig"; path = "Target Support Files/Pods-OpenCodeLynx/Pods-OpenCodeLynx.release.xcconfig"; sourceTree = "<group>"; };
+		903208232ED9629900167236 /* LynxResources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = LynxResources; sourceTree = "<group>"; };
+		9AD74935FFBD17E3B3D4E69A /* Pods_OpenCodeLynxUITests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_OpenCodeLynxUITests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B5E42D779278857A5AAB06BF /* Pods-OpenCodeLynxUITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OpenCodeLynxUITests.debug.xcconfig"; path = "Target Support Files/Pods-OpenCodeLynxUITests/Pods-OpenCodeLynxUITests.debug.xcconfig"; sourceTree = "<group>"; };
+		BEB0A8939FDC0E69DE1ACBE1 /* Pods-OpenCodeLynxUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OpenCodeLynxUITests.release.xcconfig"; path = "Target Support Files/Pods-OpenCodeLynxUITests/Pods-OpenCodeLynxUITests.release.xcconfig"; sourceTree = "<group>"; };
+		E28DB50001F3EFBF06162E18 /* Pods-OpenCodeLynx.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OpenCodeLynx.debug.xcconfig"; path = "Target Support Files/Pods-OpenCodeLynx/Pods-OpenCodeLynx.debug.xcconfig"; sourceTree = "<group>"; };
+		FC9A690424F49FA47736FA61 /* Pods-OpenCodeLynxTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OpenCodeLynxTests.release.xcconfig"; path = "Target Support Files/Pods-OpenCodeLynxTests/Pods-OpenCodeLynxTests.release.xcconfig"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		44A4C3042E271D570011A613 /* OpenCodeMethodTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = OpenCodeMethodTests;
+			sourceTree = "<group>";
+		};
+		44B59A892DE9041F00A05B89 /* OpenCodeLynx */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = OpenCodeLynx;
+			sourceTree = "<group>";
+		};
+		44B59A9B2DE9042100A05B89 /* OpenCodeLynxTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = OpenCodeLynxTests;
+			sourceTree = "<group>";
+		};
+		44B59AA52DE9042100A05B89 /* OpenCodeLynxUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = OpenCodeLynxUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		44A4C3002E271D570011A613 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		44B59A842DE9041F00A05B89 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CEAB8C5202B26CF8F0BE5581 /* Pods_OpenCodeLynx.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		44B59A952DE9042100A05B89 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E1EA18997313C777BCB28C73 /* Pods_OpenCodeLynxTests.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		44B59A9F2DE9042100A05B89 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				07B2FB684B8D385782138000 /* Pods_OpenCodeLynxUITests.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2C26194B87B073C85741772F /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				4B00F0DF4C89E15C31BC93A3 /* Pods_OpenCodeLynx.framework */,
+				34294AA1E3153C7FF24DA29D /* Pods_OpenCodeLynxTests.framework */,
+				9AD74935FFBD17E3B3D4E69A /* Pods_OpenCodeLynxUITests.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		44B59A7E2DE9041F00A05B89 = {
+			isa = PBXGroup;
+			children = (
+				903208232ED9629900167236 /* LynxResources */,
+				44B59A892DE9041F00A05B89 /* OpenCodeLynx */,
+				44B59A9B2DE9042100A05B89 /* OpenCodeLynxTests */,
+				44B59AA52DE9042100A05B89 /* OpenCodeLynxUITests */,
+				44A4C3042E271D570011A613 /* OpenCodeMethodTests */,
+				44B59A882DE9041F00A05B89 /* Products */,
+				ADC955934F105445573B90AE /* Pods */,
+				2C26194B87B073C85741772F /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		44B59A882DE9041F00A05B89 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				44B59A872DE9041F00A05B89 /* OpenCodeLynx.app */,
+				44B59A982DE9042100A05B89 /* OpenCodeLynxTests.xctest */,
+				44B59AA22DE9042100A05B89 /* OpenCodeLynxUITests.xctest */,
+				44A4C3032E271D570011A613 /* OpenCodeMethodTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		ADC955934F105445573B90AE /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				E28DB50001F3EFBF06162E18 /* Pods-OpenCodeLynx.debug.xcconfig */,
+				8CA3C88BC922913EC94B79D5 /* Pods-OpenCodeLynx.release.xcconfig */,
+				105D1EA8BB03A87166570D75 /* Pods-OpenCodeLynxTests.debug.xcconfig */,
+				FC9A690424F49FA47736FA61 /* Pods-OpenCodeLynxTests.release.xcconfig */,
+				B5E42D779278857A5AAB06BF /* Pods-OpenCodeLynxUITests.debug.xcconfig */,
+				BEB0A8939FDC0E69DE1ACBE1 /* Pods-OpenCodeLynxUITests.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		44A4C3022E271D570011A613 /* OpenCodeMethodTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 44A4C30B2E271D570011A613 /* Build configuration list for PBXNativeTarget "OpenCodeMethodTests" */;
+			buildPhases = (
+				44A4C2FF2E271D570011A613 /* Sources */,
+				44A4C3002E271D570011A613 /* Frameworks */,
+				44A4C3012E271D570011A613 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				44A4C3082E271D570011A613 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				44A4C3042E271D570011A613 /* OpenCodeMethodTests */,
+				44B59A892DE9041F00A05B89 /* OpenCodeLynx */,
+			);
+			name = OpenCodeMethodTests;
+			productName = OpenCodeMethodTests;
+			productReference = 44A4C3032E271D570011A613 /* OpenCodeMethodTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		44B59A862DE9041F00A05B89 /* OpenCodeLynx */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 44B59AAC2DE9042100A05B89 /* Build configuration list for PBXNativeTarget "OpenCodeLynx" */;
+			buildPhases = (
+				9C984960EF9A3261DC49D691 /* [CP] Check Pods Manifest.lock */,
+				44B59A832DE9041F00A05B89 /* Sources */,
+				44B59A842DE9041F00A05B89 /* Frameworks */,
+				44B59A852DE9041F00A05B89 /* Resources */,
+				51F49D3A4032A6DD15914B92 /* [CP] Embed Pods Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				44B59A892DE9041F00A05B89 /* OpenCodeLynx */,
+			);
+			name = OpenCodeLynx;
+			productName = OpenCodeLynx;
+			productReference = 44B59A872DE9041F00A05B89 /* OpenCodeLynx.app */;
+			productType = "com.apple.product-type.application";
+		};
+		44B59A972DE9042100A05B89 /* OpenCodeLynxTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 44B59AAF2DE9042100A05B89 /* Build configuration list for PBXNativeTarget "OpenCodeLynxTests" */;
+			buildPhases = (
+				912D5F4C591FEE53AE2B078A /* [CP] Check Pods Manifest.lock */,
+				44B59A942DE9042100A05B89 /* Sources */,
+				44B59A952DE9042100A05B89 /* Frameworks */,
+				44B59A962DE9042100A05B89 /* Resources */,
+				2CE636BDEA6EB413D84DBE48 /* [CP] Embed Pods Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				44B59A9A2DE9042100A05B89 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				44B59A9B2DE9042100A05B89 /* OpenCodeLynxTests */,
+			);
+			name = OpenCodeLynxTests;
+			productName = OpenCodeLynxTests;
+			productReference = 44B59A982DE9042100A05B89 /* OpenCodeLynxTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		44B59AA12DE9042100A05B89 /* OpenCodeLynxUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 44B59AB22DE9042100A05B89 /* Build configuration list for PBXNativeTarget "OpenCodeLynxUITests" */;
+			buildPhases = (
+				5F3A6C570D27881AD0B9D61E /* [CP] Check Pods Manifest.lock */,
+				44B59A9E2DE9042100A05B89 /* Sources */,
+				44B59A9F2DE9042100A05B89 /* Frameworks */,
+				44B59AA02DE9042100A05B89 /* Resources */,
+				10EDD5AE55F2E68755A1F4D3 /* [CP] Embed Pods Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				44B59AA42DE9042100A05B89 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				44B59AA52DE9042100A05B89 /* OpenCodeLynxUITests */,
+			);
+			name = OpenCodeLynxUITests;
+			productName = OpenCodeLynxUITests;
+			productReference = 44B59AA22DE9042100A05B89 /* OpenCodeLynxUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		44B59A7F2DE9041F00A05B89 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1610;
+				LastUpgradeCheck = 1610;
+				TargetAttributes = {
+					44A4C3022E271D570011A613 = {
+						CreatedOnToolsVersion = 16.1;
+						LastSwiftMigration = 1610;
+					};
+					44B59A862DE9041F00A05B89 = {
+						CreatedOnToolsVersion = 16.1;
+					};
+					44B59A972DE9042100A05B89 = {
+						CreatedOnToolsVersion = 16.1;
+						TestTargetID = 44B59A862DE9041F00A05B89;
+					};
+					44B59AA12DE9042100A05B89 = {
+						CreatedOnToolsVersion = 16.1;
+						TestTargetID = 44B59A862DE9041F00A05B89;
+					};
+				};
+			};
+			buildConfigurationList = 44B59A822DE9041F00A05B89 /* Build configuration list for PBXProject "OpenCodeLynx" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = 44B59A7E2DE9041F00A05B89;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 44B59A882DE9041F00A05B89 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				44B59A862DE9041F00A05B89 /* OpenCodeLynx */,
+				44B59A972DE9042100A05B89 /* OpenCodeLynxTests */,
+				44B59AA12DE9042100A05B89 /* OpenCodeLynxUITests */,
+				44A4C3022E271D570011A613 /* OpenCodeMethodTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		44A4C3012E271D570011A613 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		44B59A852DE9041F00A05B89 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				903208242ED9629900167236 /* LynxResources in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		44B59A962DE9042100A05B89 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		44B59AA02DE9042100A05B89 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		10EDD5AE55F2E68755A1F4D3 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-OpenCodeLynxUITests/Pods-OpenCodeLynxUITests-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-OpenCodeLynxUITests/Pods-OpenCodeLynxUITests-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-OpenCodeLynxUITests/Pods-OpenCodeLynxUITests-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		2CE636BDEA6EB413D84DBE48 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-OpenCodeLynxTests/Pods-OpenCodeLynxTests-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-OpenCodeLynxTests/Pods-OpenCodeLynxTests-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-OpenCodeLynxTests/Pods-OpenCodeLynxTests-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		51F49D3A4032A6DD15914B92 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-OpenCodeLynx/Pods-OpenCodeLynx-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-OpenCodeLynx/Pods-OpenCodeLynx-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-OpenCodeLynx/Pods-OpenCodeLynx-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		5F3A6C570D27881AD0B9D61E /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-OpenCodeLynxUITests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		912D5F4C591FEE53AE2B078A /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-OpenCodeLynxTests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		9C984960EF9A3261DC49D691 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-OpenCodeLynx-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		44A4C2FF2E271D570011A613 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		44B59A832DE9041F00A05B89 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		44B59A942DE9042100A05B89 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		44B59A9E2DE9042100A05B89 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		44A4C3082E271D570011A613 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 44B59A862DE9041F00A05B89 /* OpenCodeLynx */;
+			targetProxy = 44A4C3072E271D570011A613 /* PBXContainerItemProxy */;
+		};
+		44B59A9A2DE9042100A05B89 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 44B59A862DE9041F00A05B89 /* OpenCodeLynx */;
+			targetProxy = 44B59A992DE9042100A05B89 /* PBXContainerItemProxy */;
+		};
+		44B59AA42DE9042100A05B89 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 44B59A862DE9041F00A05B89 /* OpenCodeLynx */;
+			targetProxy = 44B59AA32DE9042100A05B89 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		44A4C3092E271D570011A613 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.lynx.methodtests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenCodeLynx.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenCodeLynx";
+			};
+			name = Debug;
+		};
+		44A4C30A2E271D570011A613 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.lynx.methodtests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		44B59AAA2DE9042100A05B89 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/OpenCodeLynx/OpenCodeLynx/Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		44B59AAB2DE9042100A05B89 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/OpenCodeLynx/OpenCodeLynx/Bridging-Header.h";
+			};
+			name = Release;
+		};
+		44B59AAD2DE9042100A05B89 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = E28DB50001F3EFBF06162E18 /* Pods-OpenCodeLynx.debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = OpencodeLynx;
+				INFOPLIST_KEY_CFBundleURLTypes = "({CFBundleTypeRole=Editor;CFBundleURLName=dev.opencode.lynx.deeplink;CFBundleURLSchemes=(\"opencode-lynx\");})";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to the photo library to save downloaded images.";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.lynx.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/OpenCodeLynx/OpenCodeLynx/Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 2.1;
+			};
+			name = Debug;
+		};
+		44B59AAE2DE9042100A05B89 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8CA3C88BC922913EC94B79D5 /* Pods-OpenCodeLynx.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = OpencodeLynx;
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to the photo library to save downloaded images.";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.lynx.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/OpenCodeLynx/OpenCodeLynx/Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 2.1;
+			};
+			name = Release;
+		};
+		44B59AB02DE9042100A05B89 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 105D1EA8BB03A87166570D75 /* Pods-OpenCodeLynxTests.debug.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.lynx.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenCodeLynx.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenCodeLynx";
+				XROS_DEPLOYMENT_TARGET = 2.1;
+			};
+			name = Debug;
+		};
+		44B59AB12DE9042100A05B89 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FC9A690424F49FA47736FA61 /* Pods-OpenCodeLynxTests.release.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.lynx.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenCodeLynx.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenCodeLynx";
+				XROS_DEPLOYMENT_TARGET = 2.1;
+			};
+			name = Release;
+		};
+		44B59AB32DE9042100A05B89 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = B5E42D779278857A5AAB06BF /* Pods-OpenCodeLynxUITests.debug.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.lynx.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_TARGET_NAME = OpenCodeLynx;
+				XROS_DEPLOYMENT_TARGET = 2.1;
+			};
+			name = Debug;
+		};
+		44B59AB42DE9042100A05B89 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = BEB0A8939FDC0E69DE1ACBE1 /* Pods-OpenCodeLynxUITests.release.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.lynx.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_TARGET_NAME = OpenCodeLynx;
+				XROS_DEPLOYMENT_TARGET = 2.1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		44A4C30B2E271D570011A613 /* Build configuration list for PBXNativeTarget "OpenCodeMethodTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				44A4C3092E271D570011A613 /* Debug */,
+				44A4C30A2E271D570011A613 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		44B59A822DE9041F00A05B89 /* Build configuration list for PBXProject "OpenCodeLynx" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				44B59AAA2DE9042100A05B89 /* Debug */,
+				44B59AAB2DE9042100A05B89 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		44B59AAC2DE9042100A05B89 /* Build configuration list for PBXNativeTarget "OpenCodeLynx" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				44B59AAD2DE9042100A05B89 /* Debug */,
+				44B59AAE2DE9042100A05B89 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		44B59AAF2DE9042100A05B89 /* Build configuration list for PBXNativeTarget "OpenCodeLynxTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				44B59AB02DE9042100A05B89 /* Debug */,
+				44B59AB12DE9042100A05B89 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		44B59AB22DE9042100A05B89 /* Build configuration list for PBXNativeTarget "OpenCodeLynxUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				44B59AB32DE9042100A05B89 /* Debug */,
+				44B59AB42DE9042100A05B89 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 44B59A7F2DE9041F00A05B89 /* Project object */;
+}

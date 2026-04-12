@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+node "$(dirname "$0")/local-gate-lib/cli.mjs" "$@"
