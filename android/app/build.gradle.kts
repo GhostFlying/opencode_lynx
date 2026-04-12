@@ -17,7 +17,11 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
-            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
+            val abis = mutableListOf("armeabi-v7a", "arm64-v8a")
+            if (project.hasProperty("includeX86ForCI")) {
+                abis.addAll(listOf("x86", "x86_64"))
+            }
+            abiFilters.addAll(abis)
         }
         buildTypes {
             release {

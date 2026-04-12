@@ -1,0 +1,104 @@
+name: required-ios-build-test
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+jobs:
+  ios_build_and_test:
+    name: iOS Build & Test
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.3
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Lynx bundles
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .ci-logs
+          pnpm build 2>&1 | tee .ci-logs/js-build.log
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2.10'
+          bundler-cache: true
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: |
+            pods-${{ runner.os }}-
+
+      - name: Install CocoaPods
+        working-directory: ios
+        run: bundle exec pod install
+
+      - name: Build for testing
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -workspace ios/OpenCodeLynx.xcworkspace \
+            -scheme OpenCodeLynx \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee .ci-logs/xcodebuild.log
+
+      - name: Run unit tests
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -workspace ios/OpenCodeLynx.xcworkspace \
+            -scheme OpenCodeLynxTests \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -derivedDataPath build/DerivedData \
+            2>&1 | tee .ci-logs/unit-tests.log
+
+      - name: Run UI tests
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -workspace ios/OpenCodeLynx.xcworkspace \
+            -scheme OpenCodeLynxUITests \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -derivedDataPath build/DerivedData \
+            2>&1 | tee .ci-logs/ui-tests.log
+
+      - name: Upload CI logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-test-logs
+          path: |
+            .ci-logs/
+            build/DerivedData/Logs/Test/*.xcresult
+          if-no-files-found: warn
+          retention-days: 14
