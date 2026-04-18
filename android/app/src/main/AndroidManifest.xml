@@ -23,6 +23,7 @@
         <activity
             android:name="com.opencode.lynx.OpenCodeLynxActivity"
             android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false" />
     </application>
 

@@ -12,6 +12,8 @@ import android.widget.FrameLayout
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import com.lynx.react.bridge.JavaOnlyArray
+import com.lynx.service.image.LynxImageService
 import com.lynx.tasm.LynxLoadMeta
 import com.lynx.tasm.LynxView
 import com.lynx.tasm.LynxViewBuilder
@@ -20,9 +22,12 @@ import com.lynx.tasm.behavior.Behavior
 import com.lynx.tasm.behavior.LynxContext
 import com.lynx.tasm.behavior.ui.LynxUI
 import com.lynx.tasm.behavior.ui.image.UIImage
+import com.lynx.tasm.service.LynxServiceCenter
 import org.json.JSONObject
 import java.net.URLDecoder
 import java.util.UUID
+import kotlin.math.abs
+import kotlin.math.max
 
 /**
  * Activity that hosts a LynxView.
@@ -35,16 +40,34 @@ import java.util.UUID
  *   - safeAreaInsets: host-derived { top, right, bottom, left } inset values
  */
 class OpenCodeLynxActivity : Activity() {
+    companion object {
+        @Volatile
+        private var lynxImageServiceRegistered = false
+
+        @Synchronized
+        private fun ensureLynxImageServiceRegistered() {
+            if (lynxImageServiceRegistered) {
+                return
+            }
+            LynxServiceCenter.inst().registerService(LynxImageService.getInstance())
+            lynxImageServiceRegistered = true
+        }
+    }
+
     private var lynxView: LynxView? = null
     private var pendingBundleName: String? = null
     private var hasRenderedTemplate = false
     private var baseGlobalProps: MutableMap<String, Any> = mutableMapOf()
     private var lastSafeAreaInsets = SafeAreaInsets()
+    private var lastKeyboardState = KeyboardEventState()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(androidx.appcompat.R.style.Theme_AppCompat_Light_NoActionBar)
         super.onCreate(savedInstanceState)
         OpenCodeActivityStack.push(this)
+        ensureLynxImageServiceRegistered()
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -141,30 +164,56 @@ class OpenCodeLynxActivity : Activity() {
         val left: Int = 0,
     )
 
+    private data class KeyboardEventState(
+        val visible: Boolean = false,
+        val heightPx: Int = 0,
+    )
+
     private fun handleWindowInsets(windowInsets: WindowInsetsCompat) {
-        val insets = windowInsets.getInsets(
+        val systemInsets = windowInsets.getInsets(
             WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
         )
         val safeAreaInsets = SafeAreaInsets(
-            top = insets.top,
-            right = insets.right,
-            bottom = insets.bottom,
-            left = insets.left,
+            top = systemInsets.top,
+            right = systemInsets.right,
+            bottom = systemInsets.bottom,
+            left = systemInsets.left,
         )
-        if (safeAreaInsets == lastSafeAreaInsets && hasRenderedTemplate) {
+        val imeInsets = windowInsets.getInsets(WindowInsetsCompat.Type.ime())
+        val keyboardHeightPx = max(0, imeInsets.bottom - safeAreaInsets.bottom)
+        val keyboardVisible = keyboardHeightPx > 0 && windowInsets.isVisible(WindowInsetsCompat.Type.ime())
+        val nextKeyboardState = KeyboardEventState(
+            visible = keyboardVisible,
+            heightPx = if (keyboardVisible) keyboardHeightPx else 0,
+        )
+
+        val safeAreaChanged = safeAreaInsets != lastSafeAreaInsets
+        val keyboardChanged = nextKeyboardState.visible != lastKeyboardState.visible ||
+            abs(nextKeyboardState.heightPx - lastKeyboardState.heightPx) > 1
+
+        if (!safeAreaChanged && !keyboardChanged && hasRenderedTemplate) {
             return
         }
-        lastSafeAreaInsets = safeAreaInsets
 
         val globalProps = baseGlobalPropsWithSafeArea(safeAreaInsets)
         val lv = lynxView ?: return
         if (!hasRenderedTemplate) {
             val bundleName = pendingBundleName ?: "main.lynx.bundle"
+            lastSafeAreaInsets = safeAreaInsets
+            lastKeyboardState = nextKeyboardState
             hasRenderedTemplate = true
             renderTemplateWithGlobalProps(lv, bundleName, globalProps)
+            dispatchKeyboardEvent(lv, nextKeyboardState, force = nextKeyboardState.visible)
             return
         }
-        lv.updateGlobalProps(globalProps)
+
+        if (safeAreaChanged) {
+            lastSafeAreaInsets = safeAreaInsets
+            lv.updateGlobalProps(globalProps)
+        }
+        if (keyboardChanged) {
+            dispatchKeyboardEvent(lv, nextKeyboardState)
+        }
     }
 
     private fun baseGlobalPropsWithSafeArea(insets: SafeAreaInsets): MutableMap<String, Any> {
@@ -188,6 +237,25 @@ class OpenCodeLynxActivity : Activity() {
         metaBuilder.setInitialData(TemplateData.empty())
         metaBuilder.setGlobalProps(TemplateData.fromMap(globalProps))
         lv.loadTemplate(metaBuilder.build())
+    }
+
+    private fun dispatchKeyboardEvent(
+        lynxView: LynxView,
+        state: KeyboardEventState,
+        force: Boolean = false,
+    ) {
+        if (!force &&
+            state.visible == lastKeyboardState.visible &&
+            abs(state.heightPx - lastKeyboardState.heightPx) <= 1
+        ) {
+            return
+        }
+
+        lastKeyboardState = state
+        val args = JavaOnlyArray()
+        args.pushString(if (state.visible) "on" else "off")
+        args.pushInt(if (state.visible) state.heightPx else 0)
+        lynxView.sendGlobalEvent("keyboardstatuschanged", args)
     }
 
     private fun parseScheme(scheme: String): ParsedScheme {

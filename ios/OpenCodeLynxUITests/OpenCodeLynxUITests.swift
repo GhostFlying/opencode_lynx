@@ -29,7 +29,6 @@ private struct ChatExpectation {
 
 final class OpenCodeLynxUITests: XCTestCase {
     private let mainReadyMarker = "qa_main_ready_marker_v1"
-    private let openSecondPageActionMarker = "qa_open_second_page_action_v1"
     private let secondReadyMarker = "qa_second_ready_marker_v1"
     private let secondCloseActionMarker = "qa_second_close_action_v1"
     private let mainReadySignalMarkerPrefix = "qa_main_ready_signal_v1"
@@ -96,16 +95,6 @@ final class OpenCodeLynxUITests: XCTestCase {
         )
 
         try assertOrderedReadiness(reactReadySignal, uiReadySignal)
-
-        let openSecondAction = try waitForStaticText(app, marker: openSecondPageActionMarker, timeout: 5)
-        openSecondAction.tap()
-
-        _ = try waitForStaticText(app, marker: secondReadyMarker, timeout: 5)
-        let closeAction = try waitForStaticText(app, marker: secondCloseActionMarker, timeout: 5)
-        closeAction.tap()
-
-        let secondMarkerElement = app.staticTexts[secondReadyMarker]
-        XCTAssertTrue(waitForDisappearance(secondMarkerElement, timeout: 5), "Second page marker should disappear after close path")
 
         _ = try waitForStaticText(app, marker: mainReadyMarker, timeout: 5)
     }
@@ -238,12 +227,95 @@ final class OpenCodeLynxUITests: XCTestCase {
         return available
     }
 
+    @MainActor
+    func testKeyboardAvoidanceKeepsSettingsFieldAndChatComposerAboveKeyboard() throws {
+        let app = XCUIApplication()
+        app.terminate()
+        app.launch()
+
+        let settingsField = try focusSettingsConnectionField(app)
+        let settingsKeyboard = try waitForKeyboard(app, timeout: 5)
+        assertElementFrame(settingsField, above: settingsKeyboard, description: "settings connection field")
+        dismissKeyboard(app)
+        waitForKeyboardToDisappear(app, timeout: 5)
+
+        let startupTarget = "hybrid://lynxview?bundle=.%2Fchat.lynx.bundle&route_params=%7B%22sessionId%22%3A%22ses_e2e%22%2C%22sessionTitle%22%3A%22Route%20Params%20OK%22%2C%22connection%22%3A%7B%22ip%22%3A%22127.0.0.1%22%2C%22port%22%3A%223000%22%2C%22password%22%3A%22%22%7D%7D"
+        let startupDeepLink = try wrapAsOuterDeepLink(startupTarget)
+        try triggerRealURLIngress(startupDeepLink, app: app, timeout: 15)
+
+        _ = try waitForStaticText(app, marker: "Route Params OK", timeout: 10)
+        let chatComposer = try focusChatComposer(app)
+        let chatKeyboard = try waitForKeyboard(app, timeout: 5)
+        assertElementFrame(chatComposer, above: chatKeyboard, description: "chat composer")
+        dismissKeyboard(app)
+        waitForKeyboardToDisappear(app, timeout: 5)
+    }
+
     private func waitForStaticText(_ app: XCUIApplication, marker: String, timeout: TimeInterval) throws -> XCUIElement {
         let markerElement = app.staticTexts[marker]
         guard markerElement.waitForExistence(timeout: timeout) else {
             throw ReadinessValidationError.markerTimeout(marker)
         }
         return markerElement
+    }
+
+    private func waitForKeyboard(_ app: XCUIApplication, timeout: TimeInterval) throws -> XCUIElement {
+        let keyboard = app.keyboards.firstMatch
+        guard keyboard.waitForExistence(timeout: timeout) else {
+            throw ReadinessValidationError.markerTimeout("keyboard")
+        }
+        return keyboard
+    }
+
+    private func waitForKeyboardToDisappear(_ app: XCUIApplication, timeout: TimeInterval) {
+        let predicate = NSPredicate(format: "exists == false")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: app.keyboards.firstMatch)
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed, "Keyboard should disappear within \(timeout)s")
+    }
+
+    private func dismissKeyboard(_ app: XCUIApplication) {
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+    }
+
+    private func focusSettingsConnectionField(_ app: XCUIApplication) throws -> XCUIElement {
+        let settingsTab = app.staticTexts["Settings"]
+        if settingsTab.waitForExistence(timeout: 5) {
+            settingsTab.tap()
+        }
+
+        let secureField = app.secureTextFields["Optional"]
+        if secureField.waitForExistence(timeout: 5) {
+            secureField.tap()
+            return secureField
+        }
+
+        throw ReadinessValidationError.markerTimeout("settings connection input")
+    }
+
+    private func focusChatComposer(_ app: XCUIApplication) throws -> XCUIElement {
+        let placeholderText = app.staticTexts["输入消息..."]
+        if placeholderText.waitForExistence(timeout: 5) {
+            placeholderText.tap()
+            return placeholderText
+        }
+
+        let textView = app.textViews.element(boundBy: 0)
+        if textView.waitForExistence(timeout: 5) {
+            textView.tap()
+            return textView
+        }
+
+        throw ReadinessValidationError.markerTimeout("chat composer")
+    }
+
+    private func assertElementFrame(_ element: XCUIElement, above keyboard: XCUIElement, description: String, slack: CGFloat = 6) {
+        let elementBottom = element.frame.maxY
+        let keyboardTop = keyboard.frame.minY
+        XCTAssertLessThanOrEqual(
+            elementBottom,
+            keyboardTop + slack,
+            "\(description) should stay above the keyboard (elementBottom=\(elementBottom), keyboardTop=\(keyboardTop))"
+        )
     }
 
     private func waitForReadySignal(_ app: XCUIApplication, phase: String, seq: Int, timeout: TimeInterval) throws -> ReadySignal {

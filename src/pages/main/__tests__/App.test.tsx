@@ -5,6 +5,28 @@ import { render, getQueriesForElement } from '@lynx-js/react/testing-library'
 import { App, type ReadySignalPayload } from '../App.js'
 
 vi.mock('../../navigation.js', () => ({ open: vi.fn() }))
+vi.mock('@lynx-js/lynx-ui', async () => {
+  const actual = await vi.importActual<typeof import('@lynx-js/lynx-ui')>('@lynx-js/lynx-ui')
+
+  return {
+    ...actual,
+    KeyboardAwareRoot: ({ children }: { children?: JSX.Element | JSX.Element[] }) => <>{children}</>,
+    KeyboardAwareResponder: ({
+      children,
+      className,
+    }: {
+      children?: JSX.Element | JSX.Element[]
+      className?: string
+    }) => <view className={className}>{children}</view>,
+    KeyboardAwareTrigger: ({
+      children,
+      className,
+    }: {
+      children?: JSX.Element | JSX.Element[]
+      className?: string
+    }) => <view className={className}>{children}</view>,
+  }
+})
 
 test('ordered happy path emits react_ready then ui_ready with shared run_id', async () => {
   const onMounted = vi.fn()

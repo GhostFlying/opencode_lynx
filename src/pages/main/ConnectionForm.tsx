@@ -1,5 +1,5 @@
 import { useCallback } from '@lynx-js/react'
-import { Button, Input } from '@lynx-js/lynx-ui'
+import { Button, Input, KeyboardAwareTrigger } from '@lynx-js/lynx-ui'
 
 import type { ConnectionContext, ConnectionFormStatus } from './connection.js'
 
@@ -52,7 +52,7 @@ export function ConnectionForm({
 
   return (
     <view className={compact ? 'connection-form connection-form--compact' : 'connection-form'}>
-      <view className="connection-field">
+      <KeyboardAwareTrigger className="connection-field">
         <text className="connection-field__label">Server IP</text>
         <Input
           id="connection-ip"
@@ -61,10 +61,10 @@ export function ConnectionForm({
           className="ui-input"
           onInput={handleIpInput}
         />
-      </view>
+      </KeyboardAwareTrigger>
 
       <view className="connection-grid">
-        <view className="connection-field connection-field--grid">
+        <KeyboardAwareTrigger className="connection-field connection-field--grid">
           <text className="connection-field__label">Port</text>
           <Input
             id="connection-port"
@@ -74,9 +74,9 @@ export function ConnectionForm({
             className="ui-input"
             onInput={handlePortInput}
           />
-        </view>
+        </KeyboardAwareTrigger>
 
-        <view className="connection-field connection-field--grid">
+        <KeyboardAwareTrigger className="connection-field connection-field--grid">
           <text className="connection-field__label">Password</text>
           <Input
             id="connection-password"
@@ -86,7 +86,7 @@ export function ConnectionForm({
             className="ui-input"
             onInput={handlePasswordInput}
           />
-        </view>
+        </KeyboardAwareTrigger>
       </view>
 
       {status === 'error' && errorMessage.length > 0

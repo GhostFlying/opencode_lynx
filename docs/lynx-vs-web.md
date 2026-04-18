@@ -79,6 +79,9 @@ You cannot assume APIs like this are safe on both threads. Some code may work on
 - **Check the official API docs before choosing where to call an API**
 - **Prefer putting side-effect logic in `useEffect` or explicitly supported callbacks**
 - **Treat cross-thread calls as architecture boundaries, not as ordinary function calls**
+- In this repository specifically, treat `lynx.__globalProps` as a low-frequency host config channel.
+  Dynamic keyboard avoidance must use `keyboardstatuschanged(status, height)` events instead of
+  pushing live keyboard height through `globalProps`.
 
 ---
 
