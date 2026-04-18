@@ -115,7 +115,6 @@ class LynxInputComponent(
           pendingShowSoftInputRequest = false
           hasInputConnection = false
           imeRetryInFlight = false
-          hideIme()
           emitEvent("blur", mapOf("value" to (text?.toString() ?: "")))
         }
       }
@@ -253,12 +252,6 @@ class LynxInputComponent(
       }
     }, IME_RETRY_DELAY_MS)
     return true
-  }
-
-  private fun hideIme() {
-    ViewCompat.getWindowInsetsController(mView)?.hide(WindowInsetsCompat.Type.ime())
-    val imm = mView.context.getSystemService(InputMethodManager::class.java) ?: return
-    imm.hideSoftInputFromWindow(mView.windowToken, 0)
   }
 
   @LynxProp(name = "placeholder")
