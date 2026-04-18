@@ -47,6 +47,11 @@ export interface InputProps extends StandardProps {
   bindblur?: (e: BlurEvent) => void;
 
   /**
+   * Event handler for focus events
+   */
+  bindfocus?: (e: BaseEvent<'focus', { value: string }>) => void;
+
+  /**
    * Placeholder text when input is empty
    */
   placeholder?: string;

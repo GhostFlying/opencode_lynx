@@ -272,6 +272,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null)
   const [fixtureMode, setFixtureMode] = useState(false)
   const [sending, setSending] = useState(false)
+  const [keyboardInsetPx, setKeyboardInsetPx] = useState(0)
   const [providersCatalog, setProvidersCatalog] = useState<ProviderInfo[]>([])
   const [agentsCatalog, setAgentsCatalog] = useState<AgentInfo[]>([])
   const [providerDefaults, setProviderDefaults] = useState<Record<string, string>>({})
@@ -296,6 +297,10 @@ export function App() {
   const safeAreaInsets = readSafeAreaInsetsFromGlobalProps()
   const chatHeaderStyle = {
     paddingTop: px(safeAreaInsets.top + CHAT_HEADER_TOP_SPACING_PX),
+  }
+  const chatBodyStyle = {
+    transform: `translateY(-${keyboardInsetPx}px)`,
+    transition: keyboardInsetPx > 0 ? 'transform 0.3s' : 'transform 0.1s',
   }
   const chatInputAreaStyle = {
     paddingBottom: px(safeAreaInsets.bottom + CHAT_INPUT_BOTTOM_SPACING_PX),
@@ -690,22 +695,27 @@ export function App() {
       })
   }, [sessionId, fixtureMode, initGateway, scrollListToBottom, updateSending, selection])
 
-  // Keyboard avoidance — add bottom padding so flex layout pushes input above keyboard
+  // Keyboard avoidance stays local to chat. Keyboard show/hide is low-frequency,
+  // so a local inset state keeps the composer and list in sync without feeding
+  // keyboard height through global props.
   useLynxGlobalEventListener(
     'keyboardstatuschanged',
     (status: unknown, keyboardHeight: unknown) => {
-      const height = status === 'on' ? (keyboardHeight as number) : 0
-      const basePaddingBottom = safeAreaInsets.bottom + CHAT_INPUT_BOTTOM_SPACING_PX
-      lynx
-        .createSelectorQuery()
-        .select('#chat-input-area')
-        .setNativeProps({
-          paddingBottom: px(basePaddingBottom + height),
-          transition: height > 0 ? 'padding-bottom 0.3s' : 'padding-bottom 0.1s',
-        })
-        .exec()
+      const parsedHeight = typeof keyboardHeight === 'number'
+        ? keyboardHeight
+        : Number(keyboardHeight ?? 0)
+      const nextHeight = status === 'on' && Number.isFinite(parsedHeight)
+        ? Math.max(0, parsedHeight)
+        : 0
+      setKeyboardInsetPx(nextHeight)
     },
   )
+
+  useEffect(() => {
+    'background only'
+    if (keyboardInsetPx <= 0 || !isAtBottomRef.current) return
+    scrollListToBottom(countVisibleMessageItems(messages, sending))
+  }, [keyboardInsetPx, messages, sending, scrollListToBottom])
 
   // Derive picker data + labels from current selection + catalogs.
   const currentModel = findModel(providersCatalog, selection.providerID, selection.modelID)
@@ -821,100 +831,102 @@ export function App() {
         </view>
       </view>
 
-      {fixtureMode
-        ? (
-          <view className="dev-banner">
-            <text className="dev-banner-text">DEV FIXTURE MODE</text>
-          </view>
-        )
-        : null}
+      <view className="chat-body" style={chatBodyStyle}>
+        {fixtureMode
+          ? (
+            <view className="dev-banner">
+              <text className="dev-banner-text">DEV FIXTURE MODE</text>
+            </view>
+          )
+          : null}
 
-      <view className="chat-content">
-        {loading ? (
-          <view className="chat-state chat-state--center" style={{ flex: 1 }}>
-            <view className="chat-state-card">
-              <text className="chat-state-card__title">Loading messages...</text>
-              <text className="chat-state-card__body">
-                Pulling the latest conversation from your OpenCode session.
-              </text>
+        <view className="chat-content">
+          {loading ? (
+            <view className="chat-state chat-state--center" style={{ flex: 1 }}>
+              <view className="chat-state-card">
+                <text className="chat-state-card__title">Loading messages...</text>
+                <text className="chat-state-card__body">
+                  Pulling the latest conversation from your OpenCode session.
+                </text>
+              </view>
             </view>
-          </view>
-        ) : error ? (
-          <view className="chat-state" style={{ flex: 1 }}>
-            <view className="chat-error-card">
-              <text className="chat-state-card__title">Something went sideways</text>
-              <text className="chat-error-text">{error}</text>
+          ) : error ? (
+            <view className="chat-state" style={{ flex: 1 }}>
+              <view className="chat-error-card">
+                <text className="chat-state-card__title">Something went sideways</text>
+                <text className="chat-error-text">{error}</text>
+              </view>
             </view>
-          </view>
-        ) : messages.length === 0 ? (
-          <view className="chat-state chat-state--center" style={{ flex: 1 }}>
-            <view className="chat-state-card">
-              <text className="chat-state-card__title">No messages yet</text>
-              <text className="chat-state-card__body">
-                Your conversation is ready whenever you want to send the first prompt.
-              </text>
+          ) : messages.length === 0 ? (
+            <view className="chat-state chat-state--center" style={{ flex: 1 }}>
+              <view className="chat-state-card">
+                <text className="chat-state-card__title">No messages yet</text>
+                <text className="chat-state-card__body">
+                  Your conversation is ready whenever you want to send the first prompt.
+                </text>
+              </view>
             </view>
-          </view>
-        ) : (
-          (() => {
-            const visibleMessages = messages.filter(hasRenderableContent)
-            return (
-              <list
-                id="chat-msg-list"
-                className="chat-list"
-                list-type="single"
-                scroll-orientation="vertical"
-                ios-fix-offset-from-start
-                initial-scroll-index={initialScrollIndex ?? undefined}
-                bindscroll={handleListScroll}
-                bindlayoutcomplete={handleInitialLayoutComplete}
-                style={{ flex: 1 }}
-              >
-                {visibleMessages.map((msg) => (
-                  <list-item
-                    item-key={msg.info.id}
-                    key={msg.info.id}
-                    estimated-main-axis-size-px={estimateMessageItemSize(msg)}
-                  >
-                    <MessageBubble
-                      role={msg.info.role ?? 'assistant'}
-                      parts={msg.parts}
-                      createdAt={msg.info.createdAt}
-                    />
-                  </list-item>
-                ))}
-                {sending ? (
-                  <list-item
-                    item-key="__thinking"
-                    key="__thinking"
-                    estimated-main-axis-size-px={96}
-                  >
-                    <view className="chat-thinking-shell">
-                      <view className="chat-thinking">
-                        <text className="chat-thinking-dot">●</text>
-                        <text className="chat-thinking-dot">●</text>
-                        <text className="chat-thinking-dot">●</text>
-                        <text className="chat-thinking-text">Agent is thinking…</text>
+          ) : (
+            (() => {
+              const visibleMessages = messages.filter(hasRenderableContent)
+              return (
+                <list
+                  id="chat-msg-list"
+                  className="chat-list"
+                  list-type="single"
+                  scroll-orientation="vertical"
+                  ios-fix-offset-from-start
+                  initial-scroll-index={initialScrollIndex ?? undefined}
+                  bindscroll={handleListScroll}
+                  bindlayoutcomplete={handleInitialLayoutComplete}
+                  style={{ flex: 1 }}
+                >
+                  {visibleMessages.map((msg) => (
+                    <list-item
+                      item-key={msg.info.id}
+                      key={msg.info.id}
+                      estimated-main-axis-size-px={estimateMessageItemSize(msg)}
+                    >
+                      <MessageBubble
+                        role={msg.info.role ?? 'assistant'}
+                        parts={msg.parts}
+                        createdAt={msg.info.createdAt}
+                      />
+                    </list-item>
+                  ))}
+                  {sending ? (
+                    <list-item
+                      item-key="__thinking"
+                      key="__thinking"
+                      estimated-main-axis-size-px={96}
+                    >
+                      <view className="chat-thinking-shell">
+                        <view className="chat-thinking">
+                          <text className="chat-thinking-dot">●</text>
+                          <text className="chat-thinking-dot">●</text>
+                          <text className="chat-thinking-dot">●</text>
+                          <text className="chat-thinking-text">Agent is thinking…</text>
+                        </view>
                       </view>
-                    </view>
-                  </list-item>
-                ) : null}
-              </list>
-            )
-          })()
-        )}
-      </view>
+                    </list-item>
+                  ) : null}
+                </list>
+              )
+            })()
+          )}
+        </view>
 
-      <ChatInput
-        onSend={handleSend}
-        disabled={sending}
-        selection={chatInputSelection}
-        variantAvailable={variantAvailable}
-        onOpenAgentPicker={handleOpenAgent}
-        onOpenModelPicker={handleOpenModel}
-        onOpenEffortPicker={handleOpenEffort}
-        areaStyle={chatInputAreaStyle}
-      />
+        <ChatInput
+          onSend={handleSend}
+          disabled={sending}
+          selection={chatInputSelection}
+          variantAvailable={variantAvailable}
+          onOpenAgentPicker={handleOpenAgent}
+          onOpenModelPicker={handleOpenModel}
+          onOpenEffortPicker={handleOpenEffort}
+          areaStyle={chatInputAreaStyle}
+        />
+      </view>
 
       {pickerKind === 'agent' ? (
         <PickerOverlay

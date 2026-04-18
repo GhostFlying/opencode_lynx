@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from '@lynx-js/react';
-import { Button } from '@lynx-js/lynx-ui';
+import { Button, KeyboardAwareResponder, KeyboardAwareRoot } from '@lynx-js/lynx-ui';
 
 import './App.css';
 import appLogo from '../../assets/app_icon.png';
@@ -578,119 +578,125 @@ export function App({
       </view>
 
       <view className={chromeShellClassName(view)} style={chromeShellStyle}>
-        <view className="content-shell">
-          {view === 'landing' ? (
-            <scroll-view className="landing-scroll" scroll-orientation="vertical">
-              <view className="hero">
-                <view className="hero__mark">
-                  <image src={appLogo} className="hero__logo" />
+        <KeyboardAwareRoot androidStatusBarPlusBottomBarHeight={safeAreaInsets.bottom}>
+          <view className="content-shell">
+            {view === 'landing' ? (
+              <KeyboardAwareResponder
+                as="ScrollView"
+                scrollviewId="landing-scroll"
+                className="landing-scroll"
+              >
+                <view className="hero">
+                  <view className="hero__mark">
+                    <image src={appLogo} className="hero__logo" />
+                  </view>
+                  <text className="hero__title">OpenCode</text>
+                  <text className="hero__subtitle">
+                    A calmer mobile surface for sessions and server status.
+                  </text>
                 </view>
-                <text className="hero__title">OpenCode</text>
-                <text className="hero__subtitle">
-                  A calmer mobile surface for sessions and server status.
-                </text>
-              </view>
 
-              <LandingView
-                connection={connection}
-                status={connectionStatus}
-                errorMessage={connectionError}
-                onChange={handleConnectionChange}
-                onSubmit={handleConnect}
-              />
-            </scroll-view>
-          ) : null}
+                <LandingView
+                  connection={connection}
+                  status={connectionStatus}
+                  errorMessage={connectionError}
+                  onChange={handleConnectionChange}
+                  onSubmit={handleConnect}
+                />
+              </KeyboardAwareResponder>
+            ) : null}
 
-          {view === 'connected' && gatewayRef.current ? (
-            <view className="connected-shell">
-              <view className="connected-shell__content">
-                {activeTab === 'sessions' ? (
-                  <SessionListView
-                    gateway={gatewayRef.current}
-                    connection={connection}
-                    onConnectionTagChange={setConnectionTag}
-                    header={
-                      <view className="topbar topbar--content" style={connectedTopbarStyle}>
-                        <view className="topbar__brand">
-                          <image src={appLogo} className="topbar__logo" />
-                        </view>
-
-                        <view className="topbar__center">
-                          <view className={`status-pill status-pill--${headerStatusTone}`}>
-                            <view className="status-pill__dot" />
-                            <text className="status-pill__text">{headerStatusText}</text>
+            {view === 'connected' && gatewayRef.current ? (
+              <view className="connected-shell">
+                <view className="connected-shell__content">
+                  {activeTab === 'sessions' ? (
+                    <SessionListView
+                      gateway={gatewayRef.current}
+                      connection={connection}
+                      onConnectionTagChange={setConnectionTag}
+                      header={
+                        <view className="topbar topbar--content" style={connectedTopbarStyle}>
+                          <view className="topbar__brand">
+                            <image src={appLogo} className="topbar__logo" />
                           </view>
-                        </view>
 
-                        <Button className="icon-button" onClick={handlePlusTap}>
-                          <view className="icon-button__inner">
-                            <text className="icon-button__text">{plusIcon()}</text>
+                          <view className="topbar__center">
+                            <view className={`status-pill status-pill--${headerStatusTone}`}>
+                              <view className="status-pill__dot" />
+                              <text className="status-pill__text">{headerStatusText}</text>
+                            </view>
                           </view>
-                        </Button>
-                      </view>
-                    }
-                    contentInsetBottom={scrollContentInsetBottom}
-                  />
-                ) : (
-                  <SettingsView
-                    connection={connection}
-                    status={connectionStatus}
-                    errorMessage={connectionError}
-                    connectionTag={connectionTag}
-                    onChange={handleConnectionChange}
-                    onReconnect={handleReconnect}
-                    onDisconnect={handleDisconnect}
-                    header={
-                      <view className="topbar topbar--content" style={connectedTopbarStyle}>
-                        <view className="topbar__spacer" />
 
-                        <view className="topbar__center">
-                          <text className="topbar__title">Settings</text>
+                          <Button className="icon-button" onClick={handlePlusTap}>
+                            <view className="icon-button__inner">
+                              <text className="icon-button__text">{plusIcon()}</text>
+                            </view>
+                          </Button>
                         </view>
+                      }
+                      contentInsetBottom={scrollContentInsetBottom}
+                    />
+                  ) : (
+                    <SettingsView
+                      connection={connection}
+                      status={connectionStatus}
+                      errorMessage={connectionError}
+                      connectionTag={connectionTag}
+                      onChange={handleConnectionChange}
+                      onReconnect={handleReconnect}
+                      onDisconnect={handleDisconnect}
+                      header={
+                        <view className="topbar topbar--content" style={connectedTopbarStyle}>
+                          <view className="topbar__spacer" />
 
-                        <view className="topbar__spacer" />
-                      </view>
-                    }
-                    contentInsetBottom={scrollContentInsetBottom}
-                  />
-                )}
-              </view>
+                          <view className="topbar__center">
+                            <text className="topbar__title">Settings</text>
+                          </view>
 
-              <view className="tabbar-float" style={tabbarFloatStyle}>
-                <view className="tabbar-stack">
-                  <x-liquid-glass
-                    className="tabbar-glass"
-                    variant="bar"
-                    corner-radius="24px"
-                    tint-alpha="0.18"
-                  />
+                          <view className="topbar__spacer" />
+                        </view>
+                      }
+                      contentInsetBottom={scrollContentInsetBottom}
+                    />
+                  )}
+                </view>
 
-                  <view className="tabbar-surface">
-                    <x-native-tabbar
-                      className="tabbar-native"
-                      selected={activeTab}
-                      pressed={pressedTab}
-                      sessions-label="Sessions"
-                      settings-label="Settings"
-                      bindtabchange={handleNativeTabChange}
+                <view className="tabbar-float" style={tabbarFloatStyle}>
+                  <view className="tabbar-stack">
+                    <x-liquid-glass
+                      className="tabbar-glass"
+                      variant="bar"
+                      corner-radius="24px"
+                      tint-alpha="0.18"
+                    />
+
+                    <view className="tabbar-surface">
+                      <x-native-tabbar
+                        className="tabbar-native"
+                        selected={activeTab}
+                        pressed={pressedTab}
+                        sessions-label="Sessions"
+                        settings-label="Settings"
+                        bindtabchange={handleNativeTabChange}
+                      />
+                    </view>
+
+                    <view
+                      className="tabbar-touch-proxy"
+                      data-left="30"
+                      data-width="342"
+                      style={tabbarTouchProxyStyle}
+                      bindtouchstart={handleTabTouchStart}
+                      bindtouchmove={handleTabTouchMove}
+                      bindtouchend={handleTabTouchEnd}
+                      bindtouchcancel={handleTabTouchCancel}
                     />
                   </view>
-
-                  <view
-                    className="tabbar-touch-proxy"
-                    data-left="30"
-                    data-width="342"
-                    style={tabbarTouchProxyStyle}
-                    bindtouchstart={handleTabTouchStart}
-                    bindtouchmove={handleTabTouchMove}
-                    bindtouchend={handleTabTouchEnd}
-                    bindtouchcancel={handleTabTouchCancel}
-                  />
                 </view>
               </view>
-            </view>
-          ) : null}
-        </view>
+            ) : null}
+          </view>
+        </KeyboardAwareRoot>
       </view>
     </view>
   );

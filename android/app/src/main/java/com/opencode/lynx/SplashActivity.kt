@@ -20,8 +20,7 @@ class SplashActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val pending = intent?.data?.let { DevSourceDeepLinkParser.resolve(it, null, source = "warm_start").selectedScheme }
-        DevSourceStartupOverrideState.updatePendingScheme(pending)
+        launchLynxPage(incomingUri = intent?.data)
     }
 
     private fun launchLynxPage(incomingUri: Uri?) {

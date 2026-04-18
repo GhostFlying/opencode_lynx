@@ -1,5 +1,5 @@
 import { useCallback } from '@lynx-js/react'
-import { Button } from '@lynx-js/lynx-ui'
+import { Button, KeyboardAwareResponder } from '@lynx-js/lynx-ui'
 
 import { ConnectionForm } from './ConnectionForm.js'
 import {
@@ -53,7 +53,11 @@ export function SettingsView({
   }, [onDisconnect])
 
   return (
-    <scroll-view className="settings-scroll" scroll-orientation="vertical">
+    <KeyboardAwareResponder
+      as="ScrollView"
+      scrollviewId="settings-scroll"
+      className="settings-scroll"
+    >
       <view className="settings-stack" style={{ paddingBottom: px(contentInsetBottom) }}>
         {header}
 
@@ -102,6 +106,6 @@ export function SettingsView({
           </Button>
         </view>
       </view>
-    </scroll-view>
+    </KeyboardAwareResponder>
   )
 }

@@ -5,13 +5,17 @@ package com.opencode.lynx
 
 import android.content.Context
 import android.graphics.Color
+import android.text.InputType
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
-import android.widget.EditText
+import androidx.appcompat.widget.AppCompatEditText
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.lynx.react.bridge.Callback
 import com.lynx.react.bridge.JavaOnlyMap
 import com.lynx.react.bridge.ReadableMap
@@ -25,10 +29,43 @@ import com.lynx.tasm.event.LynxCustomEvent
 class LynxInputComponent(
   context: LynxContext?,
   private val multiline: Boolean = false,
-) : LynxUI<EditText>(context) {
+) : LynxUI<AppCompatEditText>(context) {
 
-  override fun createView(context: Context): EditText {
-    return EditText(context).apply {
+  private companion object {
+    const val IME_RETRY_DELAY_MS = 120L
+    const val IME_MAX_ATTEMPTS = 20
+  }
+
+  private class ServedAwareEditText(context: Context) : AppCompatEditText(context) {
+    var onInputConnectionCreated: (() -> Unit)? = null
+    var onWindowFocusGained: (() -> Unit)? = null
+
+    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
+      val connection = super.onCreateInputConnection(outAttrs)
+      if (connection != null) {
+        post { onInputConnectionCreated?.invoke() }
+      }
+      return connection
+    }
+
+    override fun onCheckIsTextEditor(): Boolean {
+      return true
+    }
+
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+      super.onWindowFocusChanged(hasWindowFocus)
+      if (hasWindowFocus) {
+        post { onWindowFocusGained?.invoke() }
+      }
+    }
+  }
+
+  private var pendingShowSoftInputRequest = false
+  private var hasInputConnection = false
+  private var imeRetryInFlight = false
+
+  override fun createView(context: Context): AppCompatEditText {
+    return ServedAwareEditText(context).apply {
       if (multiline) {
         minLines = 2
         maxLines = 6
@@ -43,7 +80,23 @@ class LynxInputComponent(
       }
       background = null
       imeOptions = EditorInfo.IME_ACTION_NONE
+      inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+      isFocusable = true
+      isFocusableInTouchMode = true
+      isClickable = true
+      showSoftInputOnFocus = true
       setPadding(0, 0, 0, 0)
+      onInputConnectionCreated = {
+        hasInputConnection = true
+        if (pendingShowSoftInputRequest) {
+          scheduleImeVisibility()
+        }
+      }
+      onWindowFocusGained = {
+        if (pendingShowSoftInputRequest) {
+          scheduleImeVisibility()
+        }
+      }
       addTextChangedListener(object : TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -52,8 +105,18 @@ class LynxInputComponent(
         }
       })
       onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
-        if (!hasFocus) {
-          emitEvent("blur", null)
+        if (hasFocus) {
+          pendingShowSoftInputRequest = true
+          val imm = context.getSystemService(InputMethodManager::class.java)
+          imm?.viewClicked(this)
+          emitEvent("focus", mapOf("value" to (text?.toString() ?: "")))
+          post { scheduleImeVisibility() }
+        } else {
+          pendingShowSoftInputRequest = false
+          hasInputConnection = false
+          imeRetryInFlight = false
+          hideIme()
+          emitEvent("blur", mapOf("value" to (text?.toString() ?: "")))
         }
       }
     }
@@ -76,13 +139,14 @@ class LynxInputComponent(
   }
 
   @LynxUIMethod
-  fun focus(_params: ReadableMap, callback: Callback) {
-    if (mView.requestFocus()) {
-      if (showSoftInput()) {
-        callback.invoke(LynxUIMethodConstants.SUCCESS)
-      } else {
-        callback.invoke(LynxUIMethodConstants.UNKNOWN, "fail to show keyboard")
-      }
+  fun focus(params: ReadableMap, callback: Callback) {
+    val focused = mView.requestFocusFromTouch() || mView.requestFocus()
+    if (focused) {
+      pendingShowSoftInputRequest = true
+      val imm = mView.context.getSystemService(InputMethodManager::class.java)
+      imm?.viewClicked(mView)
+      mView.post { scheduleImeVisibility() }
+      callback.invoke(LynxUIMethodConstants.SUCCESS)
     } else {
       callback.invoke(LynxUIMethodConstants.UNKNOWN, "fail to focus")
     }
@@ -146,9 +210,55 @@ class LynxInputComponent(
     }
   }
 
-  private fun showSoftInput(): Boolean {
-    val imm = lynxContext.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-    return imm.showSoftInput(mView, InputMethodManager.SHOW_IMPLICIT, null)
+  private fun scheduleImeVisibility() {
+    if (!pendingShowSoftInputRequest || imeRetryInFlight) {
+      return
+    }
+    imeRetryInFlight = true
+    requestImeVisibility(maxAttempts = IME_MAX_ATTEMPTS)
+  }
+
+  private fun requestImeVisibility(maxAttempts: Int): Boolean {
+    if (maxAttempts <= 0) {
+      imeRetryInFlight = false
+      return false
+    }
+    val imm = mView.context.getSystemService(InputMethodManager::class.java) ?: return false
+    if (!pendingShowSoftInputRequest) {
+      imeRetryInFlight = false
+      return false
+    }
+    if (!mView.isAttachedToWindow || mView.windowToken == null || !mView.isFocused || !mView.hasWindowFocus() || !mView.isShown) {
+      mView.postDelayed({ requestImeVisibility(maxAttempts - 1) }, IME_RETRY_DELAY_MS)
+      return false
+    }
+
+    imm.viewClicked(mView)
+
+    if (!imm.isActive(mView)) {
+      imm.restartInput(mView)
+    }
+
+    imm.viewClicked(mView)
+    val shownByImm = imm.showSoftInput(mView, InputMethodManager.SHOW_IMPLICIT)
+    ViewCompat.getWindowInsetsController(mView)?.show(WindowInsetsCompat.Type.ime())
+
+    mView.postDelayed({
+      val visible = ViewCompat.getRootWindowInsets(mView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+      if (visible) {
+        pendingShowSoftInputRequest = false
+        imeRetryInFlight = false
+      } else {
+        requestImeVisibility(maxAttempts - 1)
+      }
+    }, IME_RETRY_DELAY_MS)
+    return true
+  }
+
+  private fun hideIme() {
+    ViewCompat.getWindowInsetsController(mView)?.hide(WindowInsetsCompat.Type.ime())
+    val imm = mView.context.getSystemService(InputMethodManager::class.java) ?: return
+    imm.hideSoftInputFromWindow(mView.windowToken, 0)
   }
 
   @LynxProp(name = "placeholder")

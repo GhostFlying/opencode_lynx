@@ -705,11 +705,18 @@
 }
 
 .qa-markers {
-  height: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0.01;
   overflow: hidden;
+  z-index: -1;
 }
 
 .qa-marker-text {
   font-size: 1px;
-  color: transparent;
+  line-height: 1px;
+  color: #000000;
 }

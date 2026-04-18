@@ -82,6 +82,11 @@ enum OpenCodeLynxConfigFactory {
 
 /// UIViewController that hosts a LynxView, loading a bundle with optional global props.
 final class OpenCodeLynxViewController: UIViewController {
+    private struct KeyboardEventState: Equatable {
+        let status: String
+        let height: CGFloat
+    }
+
     let bundleURL: String
     private var baseGlobalProps: [String: Any]
     private(set) var lynxView: LynxView?
@@ -89,6 +94,8 @@ final class OpenCodeLynxViewController: UIViewController {
     private var lastSafeAreaInsets: UIEdgeInsets = .zero
     private var hasLoadedTemplate = false
     private var viewportSyncCount = 0
+    private var keyboardEndFrameInScreen: CGRect = .null
+    private var lastKeyboardEventState = KeyboardEventState(status: "off", height: 0)
 
     init(bundleURL: String, globalProps: [String: Any] = [:]) {
         self.bundleURL = bundleURL
@@ -112,6 +119,7 @@ final class OpenCodeLynxViewController: UIViewController {
         NSLog("[OpenCode] LynxViewController viewDidLoad, bundleURL=%@, frame=%@", bundleURL, NSCoder.string(for: view.bounds))
 
         let config = OpenCodeLynxConfigFactory.shared
+        registerKeyboardObservers()
 
         let lv = LynxView { builder in
             builder.config = config
@@ -135,6 +143,7 @@ final class OpenCodeLynxViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         syncLynxViewportIfNeeded()
+        emitKeyboardEventIfNeeded()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -148,11 +157,13 @@ final class OpenCodeLynxViewController: UIViewController {
     override func viewSafeAreaInsetsDidChange() {
         super.viewSafeAreaInsetsDidChange()
         syncLynxViewportIfNeeded()
+        emitKeyboardEventIfNeeded()
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         syncLynxViewportIfNeeded()
+        emitKeyboardEventIfNeeded()
     }
 
     override var childForHomeIndicatorAutoHidden: UIViewController? {
@@ -269,7 +280,81 @@ final class OpenCodeLynxViewController: UIViewController {
         )
     }
 
+    private func registerKeyboardObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleKeyboardWillShow(_:)),
+            name: UIResponder.keyboardWillShowNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleKeyboardWillHide(_:)),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleKeyboardWillChangeFrame(_:)),
+            name: UIResponder.keyboardWillChangeFrameNotification,
+            object: nil
+        )
+    }
+
+    @objc private func handleKeyboardWillShow(_ notification: Notification) {
+        updateKeyboardFrame(from: notification)
+    }
+
+    @objc private func handleKeyboardWillHide(_ notification: Notification) {
+        updateKeyboardFrame(from: notification, hidden: true)
+    }
+
+    @objc private func handleKeyboardWillChangeFrame(_ notification: Notification) {
+        updateKeyboardFrame(from: notification)
+    }
+
+    private func updateKeyboardFrame(from notification: Notification, hidden: Bool = false) {
+        if hidden {
+            keyboardEndFrameInScreen = .null
+        } else if let value = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue {
+            keyboardEndFrameInScreen = value.cgRectValue
+        }
+        emitKeyboardEventIfNeeded()
+    }
+
+    private func emitKeyboardEventIfNeeded() {
+        guard hasLoadedTemplate, let lynxView else { return }
+
+        let effectiveHeight = currentKeyboardEffectiveHeight()
+        let nextState = KeyboardEventState(
+            status: effectiveHeight > 0 ? "on" : "off",
+            height: effectiveHeight
+        )
+        if nextState == lastKeyboardEventState {
+            return
+        }
+
+        lastKeyboardEventState = nextState
+        lynxView.sendGlobalEvent(
+            "keyboardstatuschanged",
+            withParams: [nextState.status, NSNumber(value: Double(nextState.height))]
+        )
+    }
+
+    private func currentKeyboardEffectiveHeight() -> CGFloat {
+        guard !keyboardEndFrameInScreen.isNull,
+              view.window != nil else {
+            return 0
+        }
+
+        let keyboardFrameInView = view.convert(keyboardEndFrameInScreen, from: nil)
+        let overlapHeight = view.bounds.intersection(keyboardFrameInView).height
+        let effectiveHeight = max(0, overlapHeight - currentSafeAreaInsets().bottom)
+        return effectiveHeight > 0.5 ? effectiveHeight : 0
+    }
+
     deinit {
+        NotificationCenter.default.removeObserver(self)
         lynxView?.clearForDestroy()
     }
 }

@@ -12,6 +12,17 @@ object DevSourceDeepLinkParser {
     private const val OUTER_SCHEME = "opencode-lynx"
     private const val OUTER_HOST = "dev-source"
     private const val FALLBACK_SCHEME = "hybrid://lynxview_page?bundle=main.lynx.bundle&hide_nav_bar=1&screen_orientation=portrait"
+    private val ALLOWED_BUNDLES = setOf(
+        "main.lynx.bundle",
+        "./main.lynx.bundle",
+        ".%2Fmain.lynx.bundle",
+        "chat.lynx.bundle",
+        "./chat.lynx.bundle",
+        ".%2Fchat.lynx.bundle",
+        "second.lynx.bundle",
+        "./second.lynx.bundle",
+        ".%2Fsecond.lynx.bundle",
+    )
 
     fun resolve(
         incomingUri: Uri?,
