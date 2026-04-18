@@ -73,7 +73,11 @@ object DevSourceDeepLinkParser {
         if (targetStart < 0) return null
         val encodedTarget = query.substring(targetStart + targetPrefix.length)
         val decoded = Uri.decode(encodedTarget)
-        return decoded.takeIf { isAllowedTarget(decoded) }
+        return parseIncomingOverrideTarget(decoded)
+    }
+
+    private fun parseIncomingOverrideTarget(target: String): String? {
+        return target.takeIf { isAllowedTarget(it) }
     }
 
     private fun isAllowedTarget(target: String): Boolean {

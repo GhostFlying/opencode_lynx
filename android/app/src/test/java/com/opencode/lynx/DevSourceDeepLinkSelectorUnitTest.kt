@@ -16,6 +16,15 @@ class DevSourceDeepLinkSelectorUnitTest {
         return method.invoke(DevSourceDeepLinkParser, target) as Boolean
     }
 
+    private fun parseIncomingOverrideTarget(target: String): String? {
+        val method = DevSourceDeepLinkParser::class.java.getDeclaredMethod(
+            "parseIncomingOverrideTarget",
+            String::class.java,
+        )
+        method.isAccessible = true
+        return method.invoke(DevSourceDeepLinkParser, target) as String?
+    }
+
     @Test
     fun parserPolicy_allowsMainBundleHybridTarget() {
         val allowed = isAllowedTarget("hybrid://lynxview_page?bundle=main.lynx.bundle&hide_nav_bar=1")
@@ -92,6 +101,31 @@ class DevSourceDeepLinkSelectorUnitTest {
             decision.selectedScheme,
         )
         assertTrue(decision.logs.any { it.contains("event=decision") && it.contains("reason=fallback_default") })
+    }
+
+    @Test
+    fun resolve_preservesNestedRouteParamsReservedCharacters() {
+        val decodedTarget =
+            "hybrid://lynxview?bundle=.%2Fchat.lynx.bundle&route_params=" +
+                "%7B%22sessionId%22%3A%22ses_reserved%22%2C%22sessionTitle%22%3A%22A%20%26%20B%20%3D%20100%25%22%2C%22connection%22%3A%7B%22password%22%3A%22p%2540ss%26word%3D1%22%7D%7D"
+
+        val parsed = parseIncomingOverrideTarget(decodedTarget)
+
+        assertEquals(decodedTarget, parsed)
+        assertTrue(parsed!!.contains("route_params=%7B"))
+        assertTrue(parsed.contains("%25"))
+        assertTrue(parsed.contains("%26"))
+        assertTrue(parsed.contains("%3D"))
+        assertFalse(parsed.contains("%2526"))
+    }
+
+    @Test
+    fun parserPolicy_acceptsDecodedChatTargetWithReservedCharactersInRouteParams() {
+        val allowed = isAllowedTarget(
+            "hybrid://lynxview?bundle=.%2Fchat.lynx.bundle&route_params=" +
+                "%7B%22sessionTitle%22%3A%22A%20%26%20B%20%3D%20100%25%22%7D",
+        )
+        assertTrue(allowed)
     }
 
     @Test
