@@ -27,11 +27,14 @@ export function createProjectsApi(
 ): ProjectsApi {
   return {
     async list(scope) {
-      return client.request(async sdk => {
+      return client.request(async (sdk, requestOptions) => {
         const sdkProject = (sdk as unknown as {
           project: { list: (parameters?: Record<string, unknown>) => Promise<{ data?: RawProject[] }> }
         }).project
-        const response = await sdkProject.list({})
+        const response = await sdkProject.list({
+          ...(requestOptions.directory ? { directory: requestOptions.directory } : {}),
+          ...(requestOptions.workspace ? { workspace: requestOptions.workspace } : {}),
+        })
         const data = Array.isArray(response?.data) ? response.data : []
         return data.map(normalizeProject).filter(p => p.id.length > 0)
       }, scope)

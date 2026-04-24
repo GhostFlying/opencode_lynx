@@ -211,13 +211,16 @@ function normalizePromptResult(message: SdkAssistantMessage): SessionPromptResul
 export function createSessionsApi(client: WrappedSdkClient, _config: OpencodeWrapperConfig): SessionsRepository {
   return {
     async list(scope) {
-      return client.request(async sdk => {
+      return client.request(async (sdk, requestOptions) => {
         // Use experimental/session endpoint to get ALL sessions across
         // directories with inline project info (GlobalSession[]).
         const experimental = (sdk as unknown as {
           experimental: { session: { list: (p: Record<string, unknown>) => Promise<SdkResponseEnvelope<unknown>> } }
         }).experimental
-        const response = await experimental.session.list({})
+        const response = await experimental.session.list({
+          ...(requestOptions.directory ? { directory: requestOptions.directory } : {}),
+          ...(requestOptions.workspace ? { workspace: requestOptions.workspace } : {}),
+        })
         const rawData = unwrapSessionEnvelope<unknown>(response)
         const data = Array.isArray(rawData) ? (rawData as SdkSession[]) : []
         return data.map(normalizeSessionSummary)
@@ -225,8 +228,11 @@ export function createSessionsApi(client: WrappedSdkClient, _config: OpencodeWra
     },
 
     async create(scope) {
-      return client.request(async sdk => {
-        const response = await sdk.session.create({})
+      return client.request(async (sdk, requestOptions) => {
+        const response = await sdk.session.create({
+          ...(requestOptions.directory ? { directory: requestOptions.directory } : {}),
+          ...(requestOptions.workspace ? { workspace: requestOptions.workspace } : {}),
+        })
         const data = unwrapSessionEnvelope<SdkSession>(response)
         return normalizeSessionRecord((data ?? {}) as SdkSession)
       }, scope)
@@ -235,8 +241,12 @@ export function createSessionsApi(client: WrappedSdkClient, _config: OpencodeWra
     async get(sessionID, scope) {
       const id = requireSessionID(sessionID)
 
-      return client.request(async sdk => {
-        const response = await sdk.session.get({ sessionID: id })
+      return client.request(async (sdk, requestOptions) => {
+        const response = await sdk.session.get({
+          sessionID: id,
+          ...(requestOptions.directory ? { directory: requestOptions.directory } : {}),
+          ...(requestOptions.workspace ? { workspace: requestOptions.workspace } : {}),
+        })
         const data = unwrapSessionEnvelope<SdkSession>(response)
         return normalizeSessionRecord((data ?? {}) as SdkSession)
       }, scope)
@@ -245,8 +255,12 @@ export function createSessionsApi(client: WrappedSdkClient, _config: OpencodeWra
     async messages(sessionID, scope) {
       const id = requireSessionID(sessionID)
 
-      return client.request(async sdk => {
-        const response = await sdk.session.messages({ sessionID: id })
+      return client.request(async (sdk, requestOptions) => {
+        const response = await sdk.session.messages({
+          sessionID: id,
+          ...(requestOptions.directory ? { directory: requestOptions.directory } : {}),
+          ...(requestOptions.workspace ? { workspace: requestOptions.workspace } : {}),
+        })
         const rawData = unwrapSessionEnvelope<unknown>(response)
         const data = Array.isArray(rawData) ? (rawData as SdkMessage[]) : []
         return data.map(normalizeSessionMessage)
@@ -257,7 +271,7 @@ export function createSessionsApi(client: WrappedSdkClient, _config: OpencodeWra
       const id = requireSessionID(sessionID)
       const parameters = validatePromptInput(payload, id)
 
-      return client.request(async sdk => {
+      return client.request(async (sdk, requestOptions) => {
         // v2 session.prompt takes a flat parameters object (sessionID, model,
         // parts, ...) rather than v1's { path:{id}, body } shape. The TS types
         // are very strict about the Part tagged union and model nesting; we
@@ -265,7 +279,11 @@ export function createSessionsApi(client: WrappedSdkClient, _config: OpencodeWra
         // structural subset.
         const response = await (sdk.session.prompt as unknown as (
           p: SdkPromptParameters,
-        ) => Promise<{ data?: { info?: SdkAssistantMessage } }>)(parameters)
+        ) => Promise<{ data?: { info?: SdkAssistantMessage } }>)({
+          ...parameters,
+          ...(requestOptions.directory ? { directory: requestOptions.directory } : {}),
+          ...(requestOptions.workspace ? { workspace: requestOptions.workspace } : {}),
+        })
 
         const data = unwrapSessionEnvelope<unknown>(response)
         const info = isRecord(data) && isRecord(data.info) ? data.info : {}

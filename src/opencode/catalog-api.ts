@@ -87,7 +87,7 @@ export function createCatalogApi(
 ): CatalogApi {
   return {
     async providers(scope): Promise<CatalogProvidersResult> {
-      return client.request(async sdk => {
+      return client.request(async (sdk, requestOptions) => {
         // v2 moved providers off `config.providers()` to a dedicated
         // `provider.list()` namespace, and renamed the `providers` field to
         // `all`. Keep the response narrowing structural so we don't have to
@@ -95,7 +95,10 @@ export function createCatalogApi(
         const sdkProvider = (sdk as unknown as {
           provider: { list: (parameters?: Record<string, unknown>) => Promise<{ data?: RawProvidersResponse }> }
         }).provider
-        const response = await sdkProvider.list({})
+        const response = await sdkProvider.list({
+          ...(requestOptions.directory ? { directory: requestOptions.directory } : {}),
+          ...(requestOptions.workspace ? { workspace: requestOptions.workspace } : {}),
+        })
         const data = (response?.data ?? {}) as RawProvidersResponse
         const rawProviders = Array.isArray(data.all)
           ? data.all
@@ -110,12 +113,15 @@ export function createCatalogApi(
     },
 
     async agents(scope): Promise<AgentInfo[]> {
-      return client.request(async sdk => {
+      return client.request(async (sdk, requestOptions) => {
         // v2 flattens app.agents() parameters (takes an options object now).
         const sdkApp = (sdk as unknown as {
           app: { agents: (parameters?: Record<string, unknown>) => Promise<{ data?: RawAgent[] }> }
         }).app
-        const response = await sdkApp.agents({})
+        const response = await sdkApp.agents({
+          ...(requestOptions.directory ? { directory: requestOptions.directory } : {}),
+          ...(requestOptions.workspace ? { workspace: requestOptions.workspace } : {}),
+        })
         const data = Array.isArray(response?.data) ? response.data : []
         return data.map(normalizeAgent).filter((a): a is AgentInfo => a !== null)
       }, scope)
