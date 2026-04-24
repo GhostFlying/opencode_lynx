@@ -60,6 +60,16 @@ The wrapper is intentionally thin. It does **not** reimplement the OpenCode SDK,
   - Session-focused repository wrapper.
   - Maps SDK session/message payloads into stable wrapper records.
   - Validates prompt and session inputs before calling the SDK.
+  - Applies resolved `directory` and `workspace` scope to the underlying SDK
+    request parameters.
+- `catalog-api.ts`
+  - Provider/model/agent catalog wrapper.
+  - Applies resolved `directory` and `workspace` scope to provider and agent
+    discovery requests.
+- `projects.ts`
+  - Project listing wrapper.
+  - Applies resolved `directory` and `workspace` scope to project discovery
+    requests.
 
 ### Streaming path
 
@@ -80,6 +90,9 @@ The wrapper is intentionally thin. It does **not** reimplement the OpenCode SDK,
 - `gateway.ts`
   - Composition root for app-facing consumption.
   - Combines sessions, events, scope resolution, and reconcile helpers into one boundary.
+- `test-support.ts`
+  - Test-only helper for local mock HTTP/SSE integration flows that should use
+    host `fetch` instead of the native bridge.
 
 ## Runtime flow
 
@@ -162,6 +175,10 @@ The wrapper is verified with deterministic unit tests under `__tests__/`:
   - Bridge-aware normalization for native envelopes and mixed SDK/native failures.
 - `sessions.repository.test.ts`
   - Session repository behavior and validation.
+- `catalog.repository.test.ts`
+  - Catalog wrapper mapping plus scope propagation.
+- `projects.repository.test.ts`
+  - Project wrapper mapping plus scope propagation.
 - `events.contracts.test.ts`
   - SSE event-name and parsing contracts.
 - `network.contracts.test.ts`
@@ -174,6 +191,9 @@ The wrapper is verified with deterministic unit tests under `__tests__/`:
   - App-facing gateway composition.
 - `gateway.integration.test.ts`
   - End-to-end wrapper interoperability with mocks.
+- backend-layer OpenCode integration tests
+  - Real HTTP + SSE flow is additionally exercised from `src/backends/__tests__/`
+    using a local mock OpenCode server.
 - `sdk-boundary.test.ts`
   - Enforcement that SDK imports stay inside the wrapper boundary.
 

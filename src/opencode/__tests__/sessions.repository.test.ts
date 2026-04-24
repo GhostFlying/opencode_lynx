@@ -67,7 +67,10 @@ describe('sessions repository wrapper', () => {
       workspace: { id: 'default' },
     })
 
-    expect(mocks.sessionListMock).toHaveBeenCalledWith({})
+    expect(mocks.sessionListMock).toHaveBeenCalledWith({
+      directory: '/repo/override',
+      workspace: 'default',
+    })
 
     expect(result).toEqual([
       {
@@ -100,7 +103,10 @@ describe('sessions repository wrapper', () => {
       workspace: { id: 'default' },
     })
 
-    expect(mocks.sessionCreateMock).toHaveBeenCalledWith({})
+    expect(mocks.sessionCreateMock).toHaveBeenCalledWith({
+      directory: '/repo/new',
+      workspace: 'default',
+    })
 
     expect(result).toEqual({
       id: 'session-created',
@@ -193,20 +199,30 @@ describe('sessions repository wrapper', () => {
 
     expect(mocks.sessionGetMock).toHaveBeenNthCalledWith(1, {
       sessionID: sessionA,
+      directory: '/repo/default',
+      workspace: 'default',
     })
     expect(mocks.sessionGetMock).toHaveBeenNthCalledWith(2, {
       sessionID: sessionB,
+      directory: '/repo/default',
+      workspace: 'default',
     })
 
     expect(mocks.sessionMessagesMock).toHaveBeenNthCalledWith(1, {
       sessionID: sessionA,
+      directory: '/repo/default',
+      workspace: 'default',
     })
     expect(mocks.sessionMessagesMock).toHaveBeenNthCalledWith(2, {
       sessionID: sessionB,
+      directory: '/repo/default',
+      workspace: 'default',
     })
 
     expect(mocks.sessionPromptMock).toHaveBeenNthCalledWith(1, {
       sessionID: sessionA,
+      directory: '/repo/default',
+      workspace: 'default',
       model: {
         providerID: 'provider-1',
         modelID: 'model-1',
@@ -215,6 +231,8 @@ describe('sessions repository wrapper', () => {
     })
     expect(mocks.sessionPromptMock).toHaveBeenNthCalledWith(2, {
       sessionID: sessionB,
+      directory: '/repo/default',
+      workspace: 'default',
       model: {
         providerID: 'provider-1',
         modelID: 'model-1',
