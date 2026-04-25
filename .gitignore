@@ -53,6 +53,13 @@ android/app/src/main/assets/
 # Android build intermediates
 android/**/build/
 
+# Xcode derived data from local test runs
+build/DerivedData*/
+build/
+
+# Local CI step logs
+.ci-logs/
+
 # Ruby / Bundler
 vendor/bundle/
 .bundle/
