@@ -34,17 +34,50 @@ final class OpenCodeLynxUITests: XCTestCase {
     private let secondCloseActionMarker = "qa_second_close_action_v1"
     private let mainReadySignalMarkerPrefix = "qa_main_ready_signal_v1"
     private let deeplinkScheme = "opencode-lynx://dev-source?target="
+    /// Visible text that only the real main page's landing hero renders
+    /// (`hero__title` in src/pages/main/App.tsx). Used to assert the app
+    /// landed on the real main page after deep-link fallback, without
+    /// coupling the production UI to QA markers.
+    private let mainPageIdentityText = "OpenCode"
 
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
 
+    /// Launch arguments that force the saved-connection storage read to return
+    /// nothing for the next launch, regardless of what a previous test wrote
+    /// into the simulator's persistent defaults. NSArgumentDomain overrides
+    /// UserDefaults persistent domains, and `readSavedConnection` treats empty
+    /// strings as "no saved connection". NOTE: only effective for `launch()`
+    /// — `XCUIApplication.open(_:)` launches without honoring launchArguments,
+    /// so deep-link tests rely on `waitForMainPageReady` instead.
+    private var blankConnectionLaunchArgs: [String] {
+        ["-opencodelynx.opencode_connection", ""]
+    }
+
+    /// Wait for any deterministic sign that the real main page mounted, in
+    /// either the `landing` state (no saved connection → "OpenCode" hero
+    /// title visible) or the `connected` state (saved connection present and
+    /// auto-connect succeeded → native tabbar exposes "Sessions" /
+    /// "Settings"). Used by fallback-to-main deeplink tests, which can't use
+    /// `blankConnectionLaunchArgs` because `app.open(_:)` ignores launchArgs.
+    private func waitForMainPageReady(_ app: XCUIApplication, timeout: TimeInterval) throws {
+        let candidates = ["OpenCode", "Sessions"]
+        let predicate = NSPredicate(format: "label IN %@", candidates)
+        let match = app.staticTexts.matching(predicate).firstMatch
+        guard match.waitForExistence(timeout: timeout) else {
+            throw ReadinessValidationError.markerTimeout("main-page-ready(\(candidates.joined(separator: "|")))")
+        }
+    }
+
     @MainActor
     func testSmokeCorePathLaunchSecondCloseAndOrderedReadiness() throws {
         let app = XCUIApplication()
+        app.terminate()
+        app.launchArguments += blankConnectionLaunchArgs
         app.launch()
 
-        _ = try waitForStaticText(app, marker: mainReadyMarker, timeout: 5)
+        _ = try waitForStaticText(app, marker: mainReadyMarker, timeout: 10)
 
         let reactReadySignal = try waitForReadySignal(
             app,
@@ -103,6 +136,7 @@ final class OpenCodeLynxUITests: XCTestCase {
     func testDeepLinkStartupHappyPathAndConsumeOnceFallbacksToDefaultOnSecondLaunch() throws {
         let app = XCUIApplication()
         app.terminate()
+        app.launchArguments += blankConnectionLaunchArgs
 
         let startupTarget = "hybrid://lynxview_page?bundle=second.lynx.bundle&title=Second%20Page&screen_orientation=portrait"
         let startupDeepLink = try wrapAsOuterDeepLink(startupTarget)
@@ -113,7 +147,7 @@ final class OpenCodeLynxUITests: XCTestCase {
         app.terminate()
         app.launch()
 
-        _ = try waitForStaticText(app, marker: mainReadyMarker, timeout: 10)
+        try waitForMainPageReady(app, timeout: 10)
         XCTAssertFalse(
             app.staticTexts[secondReadyMarker].waitForExistence(timeout: 1),
             "consume-once assertion failed: second-page startup route unexpectedly persisted across relaunch"
@@ -124,10 +158,11 @@ final class OpenCodeLynxUITests: XCTestCase {
     func testDeepLinkStartupInvalidTargetFailsClosedToMainPath() throws {
         let app = XCUIApplication()
         app.terminate()
+        app.launchArguments += blankConnectionLaunchArgs
 
         try triggerRealURLIngress("opencode-lynx://dev-source?target=%", app: app, timeout: 15)
 
-        _ = try waitForStaticText(app, marker: mainReadyMarker, timeout: 10)
+        try waitForMainPageReady(app, timeout: 10)
         XCTAssertFalse(
             app.staticTexts[secondReadyMarker].waitForExistence(timeout: 1),
             "invalid-target assertion failed: app should fail closed to default main path"
@@ -152,8 +187,21 @@ final class OpenCodeLynxUITests: XCTestCase {
 
     @MainActor
     func testMainFlowOpensChatWithSavedConnectionAndRouteParams() throws {
+        // This test requires an OpenCode-shaped HTTP server on 127.0.0.1:3000.
+        // Locally, if the server is absent, skip so a bare `xcodebuild test`
+        // run stays green.
+        guard isLocalTestServerAvailable() else {
+            throw XCTSkip("Local test server on 127.0.0.1:3000 is not available")
+        }
+
         let app = XCUIApplication()
         app.terminate()
+        // NSArgumentDomain overrides UserDefaults per launch; the bridge reads
+        // `opencodelynx.<key>` from UserDefaults.
+        app.launchArguments += [
+            "-opencodelynx.opencode_connection",
+            #"{"ip":"127.0.0.1","port":"3000","password":""}"#,
+        ]
         app.launch()
 
         let chatExpectation = try fetchFirstSessionChatExpectation()
@@ -171,6 +219,20 @@ final class OpenCodeLynxUITests: XCTestCase {
             app.staticTexts["No connection payload provided. Go back and reconnect first."].waitForExistence(timeout: 1),
             "main-flow assertion failed: chat page should receive the connection payload through route params"
         )
+    }
+
+    private func isLocalTestServerAvailable() -> Bool {
+        guard let url = URL(string: "http://127.0.0.1:3000/session") else { return false }
+        var available = false
+        let semaphore = DispatchSemaphore(value: 0)
+        let task = URLSession.shared.dataTask(with: url) { _, response, _ in
+            available = (response as? HTTPURLResponse)?.statusCode == 200
+            semaphore.signal()
+        }
+        task.resume()
+        _ = semaphore.wait(timeout: .now() + .seconds(3))
+        task.cancel()
+        return available
     }
 
     private func waitForStaticText(_ app: XCUIApplication, marker: String, timeout: TimeInterval) throws -> XCUIElement {

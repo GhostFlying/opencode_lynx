@@ -218,6 +218,39 @@ export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 pnpm run gate:android-smoke
 ```
 
+### Android server-backed UI tests
+
+The Android server-backed UI flow uses the CI OpenCode fixture server from the host machine.
+Start it on the host loopback address, wait for `/session`, and pass the Android emulator
+host alias (`10.0.2.2`) into the instrumentation runner:
+
+```bash
+uv venv
+pnpm install
+pnpm build
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+"$ANDROID_HOME/platform-tools/adb" start-server
+"$ANDROID_HOME/platform-tools/adb" wait-for-device
+mkdir -p .ci-logs
+node scripts/ci/stub-opencode-server.mjs > .ci-logs/stub-server.log 2>&1 &
+STUB_SERVER_PID=$!
+trap 'kill "$STUB_SERVER_PID" 2>/dev/null || true; wait "$STUB_SERVER_PID" 2>/dev/null || true' EXIT
+until curl -fsS http://127.0.0.1:3000/session >/dev/null; do sleep 1; done
+./android/gradlew -p android -PincludeX86ForCI \
+  -Pandroid.testInstrumentationRunnerArguments.opencodelynx_stub_base_url=http://10.0.2.2:3000 \
+  -Pandroid.testInstrumentationRunnerArguments.opencodelynx_require_stub_server=true \
+  :app:connectedDebugAndroidTest
+```
+
+Use `127.0.0.1:3000` for host-side readiness checks. Inside the Android emulator,
+`127.0.0.1` is the emulator itself, so the app/test runner must use
+`http://10.0.2.2:3000` to reach the host fixture server. The iOS Simulator can
+use host `127.0.0.1` directly. The Android debug manifest permits cleartext
+HTTP so this local fixture path works without changing release-network policy.
+Keep the fixture process running for the whole instrumented test: the app also
+opens `/global/event` as a server-sent events stream after the saved connection
+loads.
+
 ### LSP and tooling gaps
 
 These are known environment limitations, not necessarily code defects:
