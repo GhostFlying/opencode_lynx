@@ -58,6 +58,44 @@ jobs:
         working-directory: ios
         run: bundle exec pod install
 
+      - name: Boot iOS simulator
+        id: sim
+        shell: bash
+        run: |
+          set -o pipefail
+          # Pick any available iPhone 16 / 17 / Air device on any iOS 26.x
+          # runtime. Hard-pinning a patch version (e.g. 26.3) is brittle —
+          # macos-26 runner images rotate between 26.1 / 26.2 / 26.4 depending
+          # on image age, and Xcode-bundled runtimes similarly rotate locally.
+          # We only require iOS 26 family (Xcode 26.x SDK).
+          UDID=$(xcrun simctl list devices available -j | jq -r '
+            [ .devices | to_entries[]
+              | select(.key | test("iOS-26|iOS 26\\."))
+              | . as $rt
+              | .value[]
+              | select(.name == "iPhone 16" or .name == "iPhone 17" or .name == "iPhone 17 Pro" or .name == "iPhone Air")
+              | {udid: .udid, name: .name, rt: $rt.key}
+            ]
+            | sort_by(
+                (if .name == "iPhone 16" then 0
+                 elif .name == "iPhone 17" then 1
+                 elif .name == "iPhone 17 Pro" then 2
+                 else 3 end),
+                .rt
+              )
+            | first | .udid // ""')
+          if [ -z "$UDID" ]; then
+            echo "No iOS 26.x iPhone simulator available" >&2
+            xcrun simctl list devices available >&2
+            exit 1
+          fi
+          NAME=$(xcrun simctl list devices available -j | jq -r --arg u "$UDID" '
+            [.devices | to_entries[] | .key as $rt | .value[] | select(.udid == $u) | "\(.name) on \($rt)"] | first // ""')
+          echo "Booting $NAME ($UDID)"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
       - name: Build for testing
         shell: bash
         run: |
@@ -65,7 +103,7 @@ jobs:
           xcodebuild build-for-testing \
             -workspace ios/OpenCodeLynx.xcworkspace \
             -scheme OpenCodeLynx \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath build/DerivedData \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee .ci-logs/xcodebuild.log
@@ -77,9 +115,27 @@ jobs:
           xcodebuild test-without-building \
             -workspace ios/OpenCodeLynx.xcworkspace \
             -scheme OpenCodeLynxTests \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath build/DerivedData \
             2>&1 | tee .ci-logs/unit-tests.log
+
+      - name: Start stub OpenCode server
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/ci/stub-opencode-server.mjs > .ci-logs/stub-server.log 2>&1 &
+          echo "$!" > .ci-logs/stub-server.pid
+          # Wait for the server to accept connections before proceeding.
+          for i in $(seq 1 30); do
+            if curl --silent --fail --max-time 1 http://127.0.0.1:3000/session >/dev/null; then
+              echo "stub server up after ${i} attempts"
+              exit 0
+            fi
+            sleep 0.2
+          done
+          echo "stub server did not come up" >&2
+          cat .ci-logs/stub-server.log >&2 || true
+          exit 1
 
       - name: Run UI tests
         shell: bash
@@ -88,9 +144,17 @@ jobs:
           xcodebuild test-without-building \
             -workspace ios/OpenCodeLynx.xcworkspace \
             -scheme OpenCodeLynxUITests \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath build/DerivedData \
             2>&1 | tee .ci-logs/ui-tests.log
+
+      - name: Stop stub OpenCode server
+        if: always()
+        shell: bash
+        run: |
+          if [ -f .ci-logs/stub-server.pid ]; then
+            kill "$(cat .ci-logs/stub-server.pid)" 2>/dev/null || true
+          fi
 
       - name: Upload CI logs on failure
         if: failure()
@@ -102,3 +166,4 @@ jobs:
             build/DerivedData/Logs/Test/*.xcresult
           if-no-files-found: warn
           retention-days: 14
+          include-hidden-files: true
