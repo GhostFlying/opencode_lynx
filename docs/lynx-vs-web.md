@@ -234,6 +234,14 @@ Practical rules:
 
 Current example in this repo:
 
+- Android host registration in `OpenCodeLynxActivity` currently wires the
+  `image`, `input`, and `textarea` element behaviors that the app uses, plus
+  the repository-owned custom elements below
+- Android `input` / `textarea` are backed by the project-owned
+  `LynxInputComponent`. Because `@lynx-js/lynx-ui` drives controlled input
+  values through imperative UI methods, the host component must expose the
+  expected methods (`setValue`, `getValue`, `focus`, `blur`,
+  `setSelectionRange`) in addition to prop setters.
 - `x-liquid-glass` is a project-owned host component used for a cross-platform frosted / glass-like
   background surface
 - `x-native-tabbar` is a project-owned host component used when tab selection / press feedback needs
@@ -250,6 +258,10 @@ Current example in this repo:
 
 - Official docs mark these as elements that require extra integration support (`More Elements`)
 - Official `<input>` examples explicitly note that **the keyboard is not automatically avoided**
+- When using `@lynx-js/lynx-ui` `Input` / `TextArea`, treat the native method
+  contract as part of the element integration. A host implementation that only
+  accepts a `value` prop can still fail controlled hydration because the library
+  calls `invoke({ method: 'setValue' })` from effects.
 
 **Rule**: do not assume text input behaves like the browser by default, and do not assume automatic keyboard avoidance exists.
 

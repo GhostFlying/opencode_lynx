@@ -11,8 +11,9 @@ import android.view.Gravity
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import androidx.appcompat.widget.AppCompatEditText
+import android.widget.EditText
 import com.lynx.react.bridge.Callback
+import com.lynx.react.bridge.JavaOnlyMap
 import com.lynx.react.bridge.ReadableMap
 import com.lynx.tasm.behavior.LynxContext
 import com.lynx.tasm.behavior.LynxProp
@@ -21,17 +22,27 @@ import com.lynx.tasm.behavior.LynxUIMethodConstants
 import com.lynx.tasm.behavior.ui.LynxUI
 import com.lynx.tasm.event.LynxCustomEvent
 
+class LynxInputComponent(
+  context: LynxContext?,
+  private val multiline: Boolean = false,
+) : LynxUI<EditText>(context) {
 
-class LynxInputComponent(context: LynxContext?) : LynxUI<AppCompatEditText>(context) {
-
-  override fun createView(context: Context): AppCompatEditText {
-    return AppCompatEditText(context).apply {
-      setLines(1)
-      setSingleLine()
-      gravity = Gravity.CENTER_VERTICAL
+  override fun createView(context: Context): EditText {
+    return EditText(context).apply {
+      if (multiline) {
+        minLines = 2
+        maxLines = 6
+        setSingleLine(false)
+        gravity = Gravity.TOP or Gravity.START
+        setHorizontallyScrolling(false)
+      } else {
+        setLines(1)
+        setSingleLine()
+        gravity = Gravity.CENTER_VERTICAL
+        setHorizontallyScrolling(true)
+      }
       background = null
       imeOptions = EditorInfo.IME_ACTION_NONE
-      setHorizontallyScrolling(true)
       setPadding(0, 0, 0, 0)
       addTextChangedListener(object : TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -58,14 +69,14 @@ class LynxInputComponent(context: LynxContext?) : LynxUI<AppCompatEditText>(cont
   }
 
   @LynxProp(name = "value")
-  fun setValue(value: String) {
+  fun setValueProp(value: String) {
     if (value != mView.text.toString()) {
       mView.setText(value)
     }
   }
 
   @LynxUIMethod
-  fun focus(params: ReadableMap, callback: Callback) {
+  fun focus(_params: ReadableMap, callback: Callback) {
     if (mView.requestFocus()) {
       if (showSoftInput()) {
         callback.invoke(LynxUIMethodConstants.SUCCESS)
@@ -74,6 +85,64 @@ class LynxInputComponent(context: LynxContext?) : LynxUI<AppCompatEditText>(cont
       }
     } else {
       callback.invoke(LynxUIMethodConstants.UNKNOWN, "fail to focus")
+    }
+  }
+
+  @LynxUIMethod
+  fun blur(_params: ReadableMap, callback: Callback) {
+    try {
+      mView.clearFocus()
+      val imm = lynxContext.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+      imm.hideSoftInputFromWindow(mView.windowToken, 0)
+      callback.invoke(LynxUIMethodConstants.SUCCESS)
+    } catch (error: Throwable) {
+      callback.invoke(
+        LynxUIMethodConstants.UNKNOWN,
+        error.message ?: "fail to blur",
+      )
+    }
+  }
+
+  @LynxUIMethod
+  fun setValue(params: ReadableMap, callback: Callback) {
+    try {
+      val value = params.getString("value", "") ?: ""
+      if (value != mView.text.toString()) {
+        mView.setText(value)
+      }
+      callback.invoke(LynxUIMethodConstants.SUCCESS)
+    } catch (error: Throwable) {
+      callback.invoke(
+        LynxUIMethodConstants.UNKNOWN,
+        error.message ?: "fail to set value",
+      )
+    }
+  }
+
+  @LynxUIMethod
+  fun getValue(_params: ReadableMap, callback: Callback) {
+    val result = JavaOnlyMap()
+    result.putString("value", mView.text?.toString() ?: "")
+    result.putInt("selectionStart", mView.selectionStart.coerceAtLeast(0))
+    result.putInt("selectionEnd", mView.selectionEnd.coerceAtLeast(0))
+    callback.invoke(LynxUIMethodConstants.SUCCESS, result)
+  }
+
+  @LynxUIMethod
+  fun setSelectionRange(params: ReadableMap, callback: Callback) {
+    try {
+      val textLength = mView.text?.length ?: 0
+      val selectionStart = params.getInt("selectionStart", 0).coerceIn(0, textLength)
+      val selectionEnd = params
+        .getInt("selectionEnd", selectionStart)
+        .coerceIn(selectionStart, textLength)
+      mView.setSelection(selectionStart, selectionEnd)
+      callback.invoke(LynxUIMethodConstants.SUCCESS)
+    } catch (error: Throwable) {
+      callback.invoke(
+        LynxUIMethodConstants.PARAM_INVALID,
+        error.message ?: "invalid selection range",
+      )
     }
   }
 
@@ -89,17 +158,15 @@ class LynxInputComponent(context: LynxContext?) : LynxUI<AppCompatEditText>(cont
 
   @LynxProp(name = "text-color")
   fun setTextColor(value: String) {
-    var value = value
-    if (value.startsWith("#")) {
-      value = value.substring(1)
+    var rawValue = value
+    if (rawValue.startsWith("#")) {
+      rawValue = rawValue.substring(1)
     }
-    val textColor = "#" + value
-    val hintColor = "#40" + value
+    val textColor = "#" + rawValue
+    val hintColor = "#40" + rawValue
     mView.setHintTextColor(Color.parseColor(hintColor))
     mView.setTextColor(Color.parseColor(textColor))
   }
-
-
 
   private fun emitEvent(name: String, value: Map<String, Any>?) {
     val detail = LynxCustomEvent(sign, name)

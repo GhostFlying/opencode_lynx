@@ -223,7 +223,22 @@ function saveStoredSelection(sessionId: string, selection: ChatSelection): void 
 
 function readRouteParams(): RouteParams {
   const globalProps = lynx.__globalProps as Record<string, unknown> | null | undefined
-  const routeParams = globalProps?.routeParams as Record<string, unknown> | null | undefined
+  let routeParams = globalProps?.routeParams as Record<string, unknown> | null | undefined
+
+  // Some Android Lynx SDK versions do not serialise nested Maps into
+  // globalProps. queryItems keeps the raw route_params string as a fallback.
+  if (!routeParams) {
+    const queryItems = globalProps?.queryItems as Record<string, string> | null | undefined
+    const routeParamsRaw = queryItems?.route_params
+    if (typeof routeParamsRaw === 'string') {
+      try {
+        routeParams = JSON.parse(routeParamsRaw) as Record<string, unknown>
+      } catch {
+        // ignore parse error
+      }
+    }
+  }
+
   const connection = routeParams?.connection as Record<string, unknown> | null | undefined
   return {
     sessionId: typeof routeParams?.sessionId === 'string' ? routeParams.sessionId : undefined,

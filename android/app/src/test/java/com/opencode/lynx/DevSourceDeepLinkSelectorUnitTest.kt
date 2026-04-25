@@ -23,15 +23,29 @@ class DevSourceDeepLinkSelectorUnitTest {
     }
 
     @Test
-    fun parserPolicy_rejectsMissingMainBundleEvenIfHybridPage() {
-        val allowed = isAllowedTarget("hybrid://lynxview_page?bundle=other.bundle&hide_nav_bar=1")
-        assertFalse(allowed)
+    fun parserPolicy_allowsAnyAppOwnedBundleHybridTarget() {
+        // Policy aligned with iOS: no bundle-name whitelist. Structural check
+        // only — hybrid scheme + lynxview/lynxview_page host + non-empty
+        // bundle|url carrier.
+        assertTrue(isAllowedTarget("hybrid://lynxview_page?bundle=second.lynx.bundle&title=x"))
+        assertTrue(isAllowedTarget("hybrid://lynxview?bundle=chat.lynx.bundle&route_params=%7B%7D"))
+    }
+
+    @Test
+    fun parserPolicy_rejectsMissingCarrier() {
+        assertFalse(isAllowedTarget("hybrid://lynxview_page?hide_nav_bar=1"))
+        assertFalse(isAllowedTarget("hybrid://lynxview_page?bundle=&hide_nav_bar=1"))
     }
 
     @Test
     fun parserPolicy_rejectsNonHybridScheme() {
         val allowed = isAllowedTarget("https://example.com/main.lynx.bundle")
         assertFalse(allowed)
+    }
+
+    @Test
+    fun parserPolicy_rejectsUnknownInnerHost() {
+        assertFalse(isAllowedTarget("hybrid://foo?bundle=main.lynx.bundle"))
     }
 
     @Test
@@ -102,4 +116,5 @@ class DevSourceDeepLinkSelectorUnitTest {
         assertEquals("hybrid://lynxview_page?bundle=second.lynx.bundle", consumed)
         assertNull(afterConsume)
     }
+
 }

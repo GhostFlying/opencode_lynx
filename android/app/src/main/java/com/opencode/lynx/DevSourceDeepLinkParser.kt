@@ -56,12 +56,38 @@ object DevSourceDeepLinkParser {
         if (uri.scheme != OUTER_SCHEME || uri.host != OUTER_HOST) {
             return null
         }
-        val encodedTarget = uri.getQueryParameter("target") ?: return null
+        val query = uri.encodedQuery ?: return null
+        val targetPrefix = "target="
+        val targetStart = query.indexOf(targetPrefix)
+        if (targetStart < 0) return null
+        val encodedTarget = query.substring(targetStart + targetPrefix.length)
         val decoded = Uri.decode(encodedTarget)
-        return decoded.takeIf { isAllowedTarget(it) }
+        return decoded.takeIf { isAllowedTarget(decoded) }
     }
 
     private fun isAllowedTarget(target: String): Boolean {
-        return target.startsWith("hybrid://lynxview_page?") && target.contains("bundle=main.lynx.bundle")
+        // Pure-string validation so the same code runs under both Android
+        // framework (instrumented) and plain JVM unit tests without a
+        // Robolectric shadow for `android.net.Uri`.
+        val schemeSep = target.indexOf("://")
+        if (schemeSep <= 0) return false
+        if (target.substring(0, schemeSep) != "hybrid") return false
+        val afterScheme = target.substring(schemeSep + 3)
+        val hostEnd = afterScheme.indexOfAny(charArrayOf('?', '/', '#'))
+        val host = if (hostEnd < 0) afterScheme else afterScheme.substring(0, hostEnd)
+        if (host !in ALLOWED_INNER_HOSTS) return false
+        val queryStart = afterScheme.indexOf('?')
+        if (queryStart < 0) return false
+        val query = afterScheme.substring(queryStart + 1)
+        val pairs = query.split('&')
+        return pairs.any { pair ->
+            val eq = pair.indexOf('=')
+            if (eq <= 0) return@any false
+            val key = pair.substring(0, eq)
+            val value = pair.substring(eq + 1)
+            (key == "bundle" || key == "url") && value.isNotEmpty()
+        }
     }
+
+    private val ALLOWED_INNER_HOSTS = setOf("lynxview_page", "lynxview")
 }

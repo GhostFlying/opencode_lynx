@@ -12,11 +12,14 @@ import android.widget.FrameLayout
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import com.lynx.tasm.LynxLoadMeta
 import com.lynx.tasm.LynxView
 import com.lynx.tasm.LynxViewBuilder
+import com.lynx.tasm.TemplateData
 import com.lynx.tasm.behavior.Behavior
 import com.lynx.tasm.behavior.LynxContext
 import com.lynx.tasm.behavior.ui.LynxUI
+import com.lynx.tasm.behavior.ui.image.UIImage
 import org.json.JSONObject
 import java.net.URLDecoder
 import java.util.UUID
@@ -54,14 +57,25 @@ class OpenCodeLynxActivity : Activity() {
         val scheme = intent?.getStringExtra("scheme") ?: ""
         val parsed = parseScheme(scheme)
         pendingBundleName = parsed.bundleName
-        baseGlobalProps = parsed.globalProps.toMutableMap()
+        baseGlobalProps = parsed.globalProps
 
         val builder = LynxViewBuilder()
+
         builder.setTemplateProvider(BuiltinTemplateProvider(applicationContext))
         builder.registerModule(OpenCodeBridgeModule.NAME, OpenCodeBridgeModule::class.java)
+        builder.addBehavior(object : Behavior("image", false, true) {
+            override fun createUIWithParams(context: LynxContext?, params: Any?): LynxUI<*> {
+                return UIImage(context, params)
+            }
+        })
         builder.addBehavior(object : Behavior("input", false) {
             override fun createUI(context: LynxContext?): LynxUI<*>? {
                 return LynxInputComponent(context)
+            }
+        })
+        builder.addBehavior(object : Behavior("textarea", false) {
+            override fun createUI(context: LynxContext?): LynxUI<*>? {
+                return LynxInputComponent(context, multiline = true)
             }
         })
         builder.addBehavior(object : Behavior("x-liquid-glass", false) {
@@ -93,6 +107,20 @@ class OpenCodeLynxActivity : Activity() {
             windowInsets
         }
         ViewCompat.requestApplyInsets(container)
+
+        // Fallback: if the insets listener hasn't fired by the end of the
+        // next layout pass (observed under some instrumented-test / headless
+        // runs on API 34 where `requestApplyInsets` does not re-dispatch),
+        // render the template with zero safe-area so the page still loads.
+        // Any later insets callback will update globalProps via
+        // updateGlobalProps in handleWindowInsets.
+        container.post {
+            if (!hasRenderedTemplate) {
+                val bundleName = pendingBundleName ?: "main.lynx.bundle"
+                hasRenderedTemplate = true
+                renderTemplateWithGlobalProps(lv, bundleName, baseGlobalPropsWithSafeArea(lastSafeAreaInsets))
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -103,7 +131,7 @@ class OpenCodeLynxActivity : Activity() {
 
     private data class ParsedScheme(
         val bundleName: String,
-        val globalProps: Map<String, Any>,
+        val globalProps: MutableMap<String, Any>,
     )
 
     private data class SafeAreaInsets(
@@ -133,13 +161,13 @@ class OpenCodeLynxActivity : Activity() {
         if (!hasRenderedTemplate) {
             val bundleName = pendingBundleName ?: "main.lynx.bundle"
             hasRenderedTemplate = true
-            lv.renderTemplateUrl(bundleName, globalProps)
+            renderTemplateWithGlobalProps(lv, bundleName, globalProps)
             return
         }
         lv.updateGlobalProps(globalProps)
     }
 
-    private fun baseGlobalPropsWithSafeArea(insets: SafeAreaInsets): Map<String, Any> {
+    private fun baseGlobalPropsWithSafeArea(insets: SafeAreaInsets): MutableMap<String, Any> {
         val globalProps = baseGlobalProps.toMutableMap()
         globalProps["safeAreaInsets"] = mapOf(
             "top" to insets.top,
@@ -150,8 +178,21 @@ class OpenCodeLynxActivity : Activity() {
         return globalProps
     }
 
+    private fun renderTemplateWithGlobalProps(
+        lv: LynxView,
+        bundleName: String,
+        globalProps: Map<String, Any>,
+    ) {
+        val metaBuilder = LynxLoadMeta.Builder()
+        metaBuilder.setUrl(bundleName)
+        metaBuilder.setInitialData(TemplateData.empty())
+        metaBuilder.setGlobalProps(TemplateData.fromMap(globalProps))
+        lv.loadTemplate(metaBuilder.build())
+    }
+
     private fun parseScheme(scheme: String): ParsedScheme {
-        val uri = Uri.parse(scheme)
+        val decodedScheme = try { URLDecoder.decode(scheme, "UTF-8") } catch (_: Exception) { scheme }
+        val uri = Uri.parse(decodedScheme)
         var bundleName = uri.getQueryParameter("bundle") ?: "main.lynx.bundle"
         if (bundleName.startsWith("./")) {
             bundleName = bundleName.removePrefix("./")
@@ -169,7 +210,6 @@ class OpenCodeLynxActivity : Activity() {
             try {
                 val decoded = URLDecoder.decode(routeParamsRaw, "UTF-8")
                 val json = JSONObject(decoded)
-                // Convert JSONObject to Map for LynxView
                 jsonObjectToMap(json)
             } catch (_: Exception) {
                 routeParamsRaw
@@ -211,6 +251,7 @@ class OpenCodeLynxActivity : Activity() {
             }
         }
     }
+
 }
 
 /**
