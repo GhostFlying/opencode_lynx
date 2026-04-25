@@ -192,6 +192,7 @@ describe('network bridge parity integration (android/ios fixtures + transport te
         'handleNetworkRequest',
         'handleSseOpen',
         'handleSseClose',
+        'params?.getString("event_name", null)',
         'errorResult("invalid_payload")',
       ],
       'android malformed payload mapping',
@@ -219,6 +220,7 @@ describe('network bridge parity integration (android/ios fixtures + transport te
         'lastEventId',
         'Last-Event-ID',
         'reconnectAttempt',
+        'payload.eventName',
       ],
       'android sse reconnect implementation markers',
     )

@@ -27,6 +27,7 @@ data class NetworkRequestResult(
 data class NetworkSseOpenPayload(
     val path: String,
     val headers: Map<String, Any>?,
+    val eventName: String? = null,
     val onEvent: ((eventName: String, payload: Map<String, Any>) -> Unit)? = null,
 )
 
@@ -110,6 +111,7 @@ class NetworkBridgeServiceImpl(
             NetworkSseOpenPayload(
                 path = path,
                 headers = payload.headers,
+                eventName = payload.eventName,
                 onEvent = payload.onEvent,
             ),
         )

@@ -34,7 +34,8 @@ class NetworkSseOkHttpTransport(
             ?: return failOpen("Android network.sse.open requires an absolute http(s) URL.")
 
         val streamId = "stream-${streamCounter.incrementAndGet()}"
-        val eventName = "network.sse.event.$streamId"
+        val requestedEventName = payload.eventName?.trim().orEmpty()
+        val eventName = requestedEventName.ifEmpty { "network.sse.event.$streamId" }
 
         val session = SseSession(
             streamId = streamId,

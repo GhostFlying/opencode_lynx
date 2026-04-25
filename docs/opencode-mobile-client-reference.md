@@ -72,6 +72,9 @@ Current mobile wrapper mapping:
 
 - SSE ownership is inside wrapper events infrastructure
 - native path uses namespaced bridge methods (`network.capabilities`, `network.sse.open`, `network.sse.close`)
+- native SSE open accepts the JS-provided global event name and both iOS and
+  Android must dispatch stream payloads through that same name so the
+  pre-registered `GlobalEventEmitter` listener receives early events
 - fallback path uses runtime `EventSource` when native SSE is unavailable or locally disabled
 - fallback reasons are deterministic (`force_fallback`, `native_sse_disabled`, `native_unavailable`)
 

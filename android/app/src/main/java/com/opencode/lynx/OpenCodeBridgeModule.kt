@@ -96,11 +96,13 @@ class OpenCodeBridgeModule(context: LynxContext, obj: Any?) : LynxContextModule(
         }
 
         val headers = readMapAsStringMap(try { params?.getMap("headers") } catch (_: Exception) { null })
+        val eventName = params?.getString("event_name", null)?.trim()?.takeIf { it.isNotEmpty() }
 
         Thread {
             val result = sseTransport.open(NetworkSseOpenPayload(
                 path = path.trim(),
                 headers = headers,
+                eventName = eventName,
                 onEvent = { eventName, payload ->
                     // Dispatch SSE event to JS via LynxView.sendGlobalEvent
                     val arr = JavaOnlyArray()
