@@ -63,6 +63,7 @@ android {
         testImplementation(libs.junit)
         androidTestImplementation(libs.androidx.junit)
         androidTestImplementation(libs.androidx.espresso.core)
+        androidTestImplementation(libs.uiautomator)
 
         // Lynx SDK
         implementation(libs.lynx)
@@ -84,7 +85,7 @@ android {
         implementation(libs.fresco.webp.support)
         implementation(libs.fresco.animated.base)
 
-//    kapt(libs.lynx.processor)
+        kapt(libs.lynx.processor)
 
     }
 }
