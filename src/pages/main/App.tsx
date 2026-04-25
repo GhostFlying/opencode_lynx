@@ -26,6 +26,16 @@ const MAIN_READY_SIGNAL_MARKER_PREFIX = 'qa_main_ready_signal_v1' as const;
 const READY_SIGNAL_RETRY_DELAYS_MS = [0, 200, 500] as const;
 const MAX_READY_SIGNAL_ATTEMPTS = READY_SIGNAL_RETRY_DELAYS_MS.length;
 
+// attemptConnect handles expected connection failures internally. This catches
+// unexpected rejects from the async boundary so Lynx does not report them as an
+// unhandled rejection loop during startup.
+function silenceAutoConnectError(error: unknown): void {
+  console.warn(
+    'main_auto_connect_swallowed',
+    error instanceof Error ? error.message : String(error)
+  );
+}
+
 type ReadySignalAttempt = 1 | 2 | 3;
 type ViewState = 'landing' | 'connected';
 type ConnectedTab = 'sessions' | 'settings';
@@ -375,11 +385,21 @@ export function App({
   useEffect(() => {
     void (async () => {
       'background only';
-      const saved = await readSavedConnectionWithRetry();
-      const nextConnection = saved ?? defaultConnection();
-      restoredConnectionRef.current = saved ? cloneConnection(saved) : null;
-      setConnection(nextConnection);
-      setHydrated(true);
+      try {
+        const saved = await readSavedConnectionWithRetry();
+        const nextConnection = saved ?? defaultConnection();
+        restoredConnectionRef.current = saved ? cloneConnection(saved) : null;
+        setConnection(nextConnection);
+        setHydrated(true);
+      } catch (error) {
+        // Keep the async IIFE from rejecting during startup; the visible form
+        // remains usable with the default connection values.
+        console.warn(
+          'main_hydrate_failed',
+          error instanceof Error ? error.message : String(error)
+        );
+        setHydrated(true);
+      }
     })();
   }, []);
 
@@ -435,7 +455,7 @@ export function App({
     autoConnectRef.current = false;
     const initialConnection = restoredConnectionRef.current ?? connection;
     restoredConnectionRef.current = null;
-    void attemptConnect(initialConnection);
+    attemptConnect(initialConnection).catch(silenceAutoConnectError);
   }, [attemptConnect, connection, hydrated]);
 
   const handleConnectionChange = useCallback(
@@ -452,12 +472,12 @@ export function App({
 
   const handleConnect = useCallback(() => {
     'background only';
-    void attemptConnect(connection);
+    attemptConnect(connection).catch(silenceAutoConnectError);
   }, [attemptConnect, connection]);
 
   const handleReconnect = useCallback(() => {
     'background only';
-    void attemptConnect(connection);
+    attemptConnect(connection).catch(silenceAutoConnectError);
   }, [attemptConnect, connection]);
 
   const handleDisconnect = useCallback(() => {
