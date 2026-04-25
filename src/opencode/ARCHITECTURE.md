@@ -40,6 +40,9 @@ The wrapper is intentionally thin. It does **not** reimplement the OpenCode SDK,
   - Frozen v1 cross-platform `network.*` contract.
   - SSE-first capabilities (`request`, `sse.open`, `sse.close`).
   - Bridge method namespace has 3 methods: `network.request`, `network.sse.open`, `network.sse.close`.
+  - `network.sse.open` carries the JS listener event name; native hosts must
+    echo that name in the open response and use it for `GlobalEventEmitter`
+    dispatch so early stream events are not lost.
   - No global polyfill assumptions, transport calls flow through the namespaced native bridge (`nativeBridge` LynxModule).
 - `config.ts`
   - Single-workspace policy enforcement.
@@ -94,7 +97,9 @@ The wrapper is intentionally thin. It does **not** reimplement the OpenCode SDK,
 1. The app calls `gateway.events.subscribe(...)`.
 2. `events.ts` builds the stream URL and lifecycle manager.
 3. SSE streams are opened directly through the native bridge via `network.sse.open`.
-4. Raw stream messages are parsed into typed events.
+4. JS pre-registers a `GlobalEventEmitter` listener before the open call, and
+   the native host dispatches every stream payload through that event name.
+5. Raw stream messages are parsed into typed events.
 6. `reconcile.ts` evaluates dedupe, order, and gap rules.
 7. The gateway emits parsed events plus reconciliation context to the caller.
 8. If ordering is invalid, the gateway returns a typed `refetchRequired` action and leaves refetch policy to the caller.
