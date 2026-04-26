@@ -75,7 +75,10 @@ final class OpenCodeLynxUITests: XCTestCase {
         let app = XCUIApplication()
         app.terminate()
         app.launchArguments += blankConnectionLaunchArgs
-        app.launch()
+
+        let qaTestTarget = "hybrid://lynxview_page?bundle=qa-test.lynx.bundle"
+        let qaTestDeepLink = try wrapAsOuterDeepLink(qaTestTarget)
+        try triggerRealURLIngress(qaTestDeepLink, app: app, timeout: 15)
 
         _ = try waitForStaticText(app, marker: mainReadyMarker, timeout: 10)
 
