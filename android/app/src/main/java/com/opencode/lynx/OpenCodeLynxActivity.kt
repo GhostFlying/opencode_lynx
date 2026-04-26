@@ -23,6 +23,7 @@ import com.lynx.tasm.behavior.LynxContext
 import com.lynx.tasm.behavior.ui.LynxUI
 import com.lynx.tasm.behavior.ui.image.UIImage
 import com.lynx.tasm.service.LynxServiceCenter
+import com.lynx.xelement.XElementBehaviors
 import org.json.JSONObject
 import java.net.URLDecoder
 import java.util.UUID
@@ -91,16 +92,7 @@ class OpenCodeLynxActivity : Activity() {
                 return UIImage(context, params)
             }
         })
-        builder.addBehavior(object : Behavior("input", false) {
-            override fun createUI(context: LynxContext?): LynxUI<*>? {
-                return LynxInputComponent(context)
-            }
-        })
-        builder.addBehavior(object : Behavior("textarea", false) {
-            override fun createUI(context: LynxContext?): LynxUI<*>? {
-                return LynxInputComponent(context, multiline = true)
-            }
-        })
+        builder.addBehaviors(XElementBehaviors().create())
         builder.addBehavior(object : Behavior("x-liquid-glass", false) {
             override fun createUI(context: LynxContext?): LynxUI<*>? {
                 return LynxLiquidGlassComponent(context)

@@ -237,14 +237,17 @@ Practical rules:
 
 Current example in this repo:
 
-- Android host registration in `OpenCodeLynxActivity` currently wires the
-  `image`, `input`, and `textarea` element behaviors that the app uses, plus
-  the repository-owned custom elements below
-- Android `input` / `textarea` are backed by the project-owned
-  `LynxInputComponent`. Because `@lynx-js/lynx-ui` drives controlled input
-  values through imperative UI methods, the host component must expose the
-  expected methods (`setValue`, `getValue`, `focus`, `blur`,
-  `setSelectionRange`) in addition to prop setters.
+- Android host registration in `OpenCodeLynxActivity` wires the `image`
+  behavior, registers the official XElement bundle via
+  `builder.addBehaviors(XElementBehaviors().create())` (which provides
+  `input`, `textarea`, `overlay`, and `svg`), and then adds the
+  repository-owned custom elements below
+- `<input>` / `<textarea>` come from the official XElement integration on
+  both platforms — iOS via the `XElement` pod, Android via the
+  `org.lynxsdk.lynx:xelement` Maven artifact. The XElement implementation
+  exposes the imperative `setValue` / `getValue` / `focus` / `blur` /
+  `setSelectionRange` UI methods that `@lynx-js/lynx-ui` relies on for
+  controlled input values
 - `x-liquid-glass` is a project-owned host component used for a cross-platform frosted / glass-like
   background surface
 - `x-native-tabbar` is a project-owned host component used when tab selection / press feedback needs
@@ -259,12 +262,22 @@ Current example in this repo:
 
 #### `<input>` / `<textarea>`
 
-- Official docs mark these as elements that require extra integration support (`More Elements`)
-- Official `<input>` examples explicitly note that **the keyboard is not automatically avoided**
-- When using `@lynx-js/lynx-ui` `Input` / `TextArea`, treat the native method
-  contract as part of the element integration. A host implementation that only
-  accepts a `value` prop can still fail controlled hydration because the library
-  calls `invoke({ method: 'setValue' })` from effects.
+- Official docs mark these as elements that require extra integration support
+  (`More Elements`). In this repo both elements are provided by the official
+  XElement integration: iOS pulls `pod 'XElement'` in `ios/Podfile`, Android
+  pulls `org.lynxsdk.lynx:xelement` (via the `lynx-xelement` alias in
+  `android/gradle/libs.versions.toml`) and registers it through
+  `builder.addBehaviors(XElementBehaviors().create())` in
+  `OpenCodeLynxActivity`
+- Use CSS `color` to style text — the `text-color` prop from earlier custom
+  scaffolds is not part of XElement
+- The XElement implementation provides the `setValue` / `getValue` / `focus` /
+  `blur` / `setSelectionRange` UI methods that `@lynx-js/lynx-ui` calls from
+  effects, so controlled inputs (`Input` / `TextArea`) hydrate correctly
+- Official `<input>` examples explicitly note that **the keyboard is not
+  automatically avoided** — the host activity continues to dispatch a
+  `keyboardstatuschanged` global event from its WindowInsets listener for
+  pages that need to react to IME visibility
 
 **Rule**: do not assume text input behaves like the browser by default, and do not assume automatic keyboard avoidance exists.
 
