@@ -55,11 +55,6 @@ export interface InputProps extends StandardProps {
    * Placeholder text when input is empty
    */
   placeholder?: string;
-
-  /**
-   * Text color of the input
-   */
-  'text-color'?: string;
 }
 
 export type InputEvent = BaseEvent<'input', { value: string }>;

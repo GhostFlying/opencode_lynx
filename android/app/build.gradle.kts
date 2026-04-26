@@ -73,6 +73,7 @@ android {
         implementation(libs.lynx.service.image)
         implementation(libs.lynx.service.log)
         implementation(libs.lynx.service.http)
+        implementation(libs.lynx.xelement)
 
         implementation("com.squareup.okhttp3:okhttp:4.9.0")
         implementation("com.squareup.okhttp3:okhttp-sse:4.9.0")
