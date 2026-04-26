@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Runs the Android instrumented test gate with a host-side OpenCode fixture.
-# The workflow invokes this through the emulator-runner action; keeping the
-# orchestration in bash preserves Gradle's exit status while still collecting
-# useful logs on failure.
+# Runs the required Android instrumented gate.
+#
+# Keep this focused on the dedicated qa-test bundle deeplink/navigation smoke
+# path. Broader server-backed main-bundle flows are useful as optional coverage,
+# but they should not make this required CI job depend on production UI content.
 
 set -o pipefail
 
@@ -12,7 +13,6 @@ fi
 
 mkdir -p .ci-logs
 
-STUB_SERVER_PID=
 LOGCAT_PID=
 
 cleanup() {
@@ -20,12 +20,6 @@ cleanup() {
     kill "${LOGCAT_PID}" 2>/dev/null || true
     wait "${LOGCAT_PID}" 2>/dev/null || true
     LOGCAT_PID=
-  fi
-
-  if [ -n "${STUB_SERVER_PID}" ]; then
-    kill "${STUB_SERVER_PID}" 2>/dev/null || true
-    wait "${STUB_SERVER_PID}" 2>/dev/null || true
-    STUB_SERVER_PID=
   fi
 }
 
@@ -35,38 +29,9 @@ adb logcat -c || true
 adb logcat -v threadtime > .ci-logs/logcat-live.txt 2>&1 &
 LOGCAT_PID=$!
 
-node scripts/ci/stub-opencode-server.mjs > .ci-logs/stub-server.log 2>&1 &
-STUB_SERVER_PID=$!
-
-stub_ready=0
-for _ in $(seq 1 60); do
-  if curl -fsS http://127.0.0.1:3000/session >/dev/null 2>&1; then
-    stub_ready=1
-    echo "stub OpenCode server ready at http://127.0.0.1:3000/session"
-    break
-  fi
-  if ! kill -0 "${STUB_SERVER_PID}" 2>/dev/null; then
-    echo "stub OpenCode server exited before becoming ready"
-    break
-  fi
-  sleep 1
-done
-
-if [ "${stub_ready}" -eq 1 ]; then
-  ./android/gradlew -p android -PincludeX86ForCI \
-    -Pandroid.testInstrumentationRunnerArguments.opencodelynx_stub_base_url=http://10.0.2.2:3000 \
-    -Pandroid.testInstrumentationRunnerArguments.opencodelynx_require_stub_server=true \
-    :app:connectedDebugAndroidTest 2>&1 \
-    | tee .ci-logs/android-instrumented-tests.log
-  gradle_exit=${PIPESTATUS[0]}
-else
-  gradle_exit=1
-  {
-    echo "stub OpenCode server did not become ready at http://127.0.0.1:3000/session"
-    echo "--- .ci-logs/stub-server.log ---"
-    tail -200 .ci-logs/stub-server.log 2>/dev/null || true
-  } | tee .ci-logs/android-instrumented-tests.log
-fi
+bash scripts/ci/run-android-deeplink-smoke.sh -PincludeX86ForCI 2>&1 \
+  | tee .ci-logs/android-instrumented-tests.log
+gradle_exit=${PIPESTATUS[0]}
 
 cleanup
 

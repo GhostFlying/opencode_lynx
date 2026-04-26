@@ -63,6 +63,9 @@ When your change is ready:
    - `pnpm run gate:ios-smoke`
    - `pnpm run gate:android-deeplink-smoke`
    - `pnpm run gate:android-smoke`
+   The deeplink smoke commands exercise the dedicated QA bundle used by the
+   required CI gates. The broader Android smoke command also runs optional
+   server-backed production main-flow coverage.
 5. use a typed lowercase commit title
 6. keep commit scope focused and reviewable
 

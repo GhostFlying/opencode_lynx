@@ -63,9 +63,12 @@ pnpm run gate:android-smoke
 ```
 
 Use those optional smoke commands when a change affects native host behavior, startup routing, or deeplink handling.
-The core iOS and Android smoke path launches the dedicated `qa-test.lynx.bundle`
-so it can verify deeplink startup and second-page navigation without coupling
-those assertions to the production `main.lynx.bundle` UI.
+The required iOS and Android deeplink smoke paths launch the dedicated
+`qa-test.lynx.bundle` so they can verify startup routing and second-page
+navigation without coupling those assertions to the production
+`main.lynx.bundle` UI. `gate:android-smoke` runs broader Android
+instrumentation coverage and is useful as an optional local check when you are
+intentionally validating production main-flow behavior.
 
 ## Maintainer-only local-gate note
 
@@ -218,12 +221,16 @@ pnpm build
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 "$ANDROID_HOME/platform-tools/adb" start-server
 "$ANDROID_HOME/platform-tools/adb" wait-for-device
-pnpm run gate:android-smoke
+pnpm run gate:android-deeplink-smoke
 ```
+
+Run `pnpm run gate:android-smoke` separately when you intentionally want the
+broader Android instrumentation class, including server-backed production
+main-flow coverage.
 
 ### Android server-backed UI tests
 
-The Android server-backed UI flow uses the CI OpenCode fixture server from the host machine.
+The optional Android server-backed UI flow uses the CI OpenCode fixture server from the host machine.
 Start it on the host loopback address, wait for `/session`, and pass the Android emulator
 host alias (`10.0.2.2`) into the instrumentation runner:
 
