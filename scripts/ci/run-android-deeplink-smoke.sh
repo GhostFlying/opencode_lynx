@@ -2,10 +2,13 @@
 # Runs Android deeplink smoke tests one instrumentation method at a time.
 # Separate invocations keep startup override state isolated and make "0 tests"
 # failures point at the exact method selector that went stale.
+# Extra arguments are passed through to Gradle, for example CI's
+# -PincludeX86ForCI flag for the x86_64 emulator image.
 
 set -eo pipefail
 
 TEST_CLASS="com.opencode.lynx.ExampleInstrumentedTest"
+GRADLE_EXTRA_ARGS=("$@")
 TEST_METHODS=(
   "testDeeplinkColdStartAcceptedTargetConsumesAndTransitions"
   "testDeeplinkLauncherIntentFallsBackToDefaultMainWithoutConsume"
@@ -18,7 +21,7 @@ run_gradle_for_method() {
   local method_name="$1"
   shift
 
-  ./android/gradlew -p android :app:connectedDebugAndroidTest "$@" \
+  ./android/gradlew -p android "${GRADLE_EXTRA_ARGS[@]}" :app:connectedDebugAndroidTest "$@" \
     -Pandroid.testInstrumentationRunnerArguments.class="${TEST_CLASS}#${method_name}"
 }
 
