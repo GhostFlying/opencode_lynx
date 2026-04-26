@@ -41,6 +41,11 @@ pnpm run test:ci
 pnpm build
 ```
 
+For the OpenCode backend-facade production page migration, also run the
+server-backed iOS and Android UI flows against the CI stub server. These are
+the acceptance gates for confirming that saved connections, session routing,
+message loading, and route params still work through the facade.
+
 ## Common commands
 
 Run these after `uv venv` and `pnpm install`:
@@ -146,6 +151,28 @@ pnpm run gate:ios-smoke
 
 Do not skip the build step before iOS smoke when page content changed.
 
+### iOS server-backed main flow
+
+The OpenCode facade page migration requires the iOS server-backed main flow to
+run with a live CI fixture server. A missing fixture server is a failure for
+this acceptance path, not a skip:
+
+```bash
+uv venv
+pnpm install
+pnpm build
+mkdir -p .ci-logs
+node scripts/ci/stub-opencode-server.mjs > .ci-logs/stub-server.log 2>&1 &
+STUB_SERVER_PID=$!
+trap 'kill "$STUB_SERVER_PID" 2>/dev/null || true; wait "$STUB_SERVER_PID" 2>/dev/null || true' EXIT
+until curl -fsS http://127.0.0.1:3000/session >/dev/null; do sleep 1; done
+xcodebuild test \
+  -workspace ios/OpenCodeLynx.xcworkspace \
+  -scheme OpenCodeLynxUITests \
+  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  '-only-testing:OpenCodeLynxUITests/OpenCodeLynxUITests/testMainFlowOpensChatWithSavedConnectionAndRouteParams'
+```
+
 ### `pnpm run:ios` strict launch verification
 
 This repository wraps the iOS build with a strict verification step in `scripts/run-ios-strict.mjs`.
@@ -230,7 +257,7 @@ main-flow coverage.
 
 ### Android server-backed UI tests
 
-The optional Android server-backed UI flow uses the CI OpenCode fixture server from the host machine.
+The Android server-backed UI flow uses the CI OpenCode fixture server from the host machine.
 Start it on the host loopback address, wait for `/session`, and pass the Android emulator
 host alias (`10.0.2.2`) into the instrumentation runner:
 

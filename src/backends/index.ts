@@ -55,3 +55,11 @@ export type {
   OpencodeBackendConnection,
   OpencodeBackendConnectionInput,
 } from './opencode/page-migration.js'
+export {
+  findBackendModel,
+  findBackendProvider,
+  getBackendModelReasoningEffortKeys,
+  inferSelectionFromBackendMessages,
+  selectionFromBackendMessage,
+} from './ui-mappers.js'
+export type { BackendChatSelection } from './ui-mappers.js'

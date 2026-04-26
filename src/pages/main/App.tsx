@@ -10,13 +10,12 @@ import {
   clearSavedConnection,
   cloneConnection,
   connectionTagTone,
-  connectToGateway,
+  connectToBackendClient,
   defaultConnection,
-  readSavedConnection,
   readSavedConnectionWithRetry,
 } from './connection.js';
 import type { ConnectionContext, ConnectionFormStatus, ConnectionTag } from './connection.js';
-import type { OpenCodeGatewayContract } from '../../opencode/gateway.js';
+import type { BackendClient } from '../../backends/index.js';
 import type { TouchEvent } from '@lynx-js/types';
 import { px, readSafeAreaInsetsFromGlobalProps } from '../../safeArea.js';
 
@@ -197,7 +196,7 @@ export function App({
   const [connectionError, setConnectionError] = useState('');
   const [connectionTag, setConnectionTag] = useState<ConnectionTag>('Idle');
   const [hydrated, setHydrated] = useState(false);
-  const gatewayRef = useRef<OpenCodeGatewayContract | null>(null);
+  const clientRef = useRef<BackendClient | null>(null);
   const connectingRef = useRef(false);
   const autoConnectRef = useRef(true);
   const restoredConnectionRef = useRef<ConnectionContext | null>(null);
@@ -404,8 +403,8 @@ export function App({
   }, []);
 
   const handleConnectSuccess = useCallback(
-    (gateway: OpenCodeGatewayContract, nextConnection: ConnectionContext) => {
-      gatewayRef.current = gateway;
+    (client: BackendClient, nextConnection: ConnectionContext) => {
+      clientRef.current = client;
       setConnection(cloneConnection(nextConnection));
       setConnectionStatus('connected');
       setConnectionError('');
@@ -429,8 +428,8 @@ export function App({
       setConnection(cloneConnection(nextConnection));
 
       try {
-        const result = await connectToGateway(nextConnection);
-        handleConnectSuccess(result.gateway, result.connection);
+        const result = await connectToBackendClient(nextConnection);
+        handleConnectSuccess(result.client, result.connection);
       } catch (error) {
         const message =
           error instanceof Error && error.message.trim().length > 0
@@ -482,7 +481,7 @@ export function App({
 
   const handleDisconnect = useCallback(() => {
     'background only';
-    gatewayRef.current = null;
+    clientRef.current = null;
     clearSavedConnection();
     setConnectionStatus('idle');
     setConnectionError('');
@@ -606,12 +605,12 @@ export function App({
               </KeyboardAwareResponder>
             ) : null}
 
-            {view === 'connected' && gatewayRef.current ? (
+            {view === 'connected' && clientRef.current ? (
               <view className="connected-shell">
                 <view className="connected-shell__content">
                   {activeTab === 'sessions' ? (
                     <SessionListView
-                      gateway={gatewayRef.current}
+                      client={clientRef.current}
                       connection={connection}
                       onConnectionTagChange={setConnectionTag}
                       header={

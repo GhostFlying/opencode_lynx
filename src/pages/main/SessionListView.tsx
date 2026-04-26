@@ -2,12 +2,16 @@ import { useCallback, useEffect, useRef, useState } from '@lynx-js/react';
 
 import { open } from '../../navigation.js';
 import type {
-  OpenCodeGatewayContract,
-  OpenCodeGatewayEventSubscription,
-} from '../../opencode/gateway.js';
-import type { ProjectSummary } from '../../opencode/types.js';
+  BackendClient,
+  BackendSubscription,
+} from '../../backends/index.js';
 import type { ConnectionContext, ConnectionTag } from './connection.js';
 import { toConnectionTag } from './connection.js';
+import {
+  mapBackendSessionToSessionItem,
+  shouldRefreshSessionListForBackendEvent,
+} from './session-list-model.js';
+import type { ProjectSummaryLike, SessionItem } from './session-list-model.js';
 
 const WORKTREE_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M14.2036 7.19987L14.2079 6.69989L13.2079 6.69132L13.2036 7.1913L13.7036 7.19559L14.2036 7.19987ZM8.14804 5.09032H7.64804C7.64804 5.75797 7.06861 6.34471 6.29619 6.34471V6.84471V7.34471C7.56926 7.34471 8.64804 6.36051 8.64804 5.09032H8.14804ZM6.29619 6.84471V6.34471C5.52376 6.34471 4.94434 5.75797 4.94434 5.09032H4.44434H3.94434C3.94434 6.36051 5.02311 7.34471 6.29619 7.34471V6.84471ZM4.44434 5.09032H4.94434C4.94434 4.42267 5.52376 3.83594 6.29619 3.83594V3.33594V2.83594C5.02311 2.83594 3.94434 3.82013 3.94434 5.09032H4.44434ZM6.29619 3.33594V3.83594C7.06861 3.83594 7.64804 4.42267 7.64804 5.09032H8.14804H8.64804C8.64804 3.82013 7.56926 2.83594 6.29619 2.83594V3.33594ZM8.14804 14.9149H7.64804C7.64804 15.5825 7.06861 16.1693 6.29619 16.1693V16.6693V17.1693C7.56926 17.1693 8.64804 16.1851 8.64804 14.9149H8.14804ZM6.29619 16.6693V16.1693C5.52376 16.1693 4.94434 15.5825 4.94434 14.9149H4.44434H3.94434C3.94434 16.1851 5.02311 17.1693 6.29619 17.1693V16.6693ZM4.44434 14.9149H4.94434C4.94434 14.2472 5.52376 13.6605 6.29619 13.6605V13.1605V12.6605C5.02311 12.6605 3.94434 13.6447 3.94434 14.9149H4.44434ZM6.29619 13.1605V13.6605C7.06861 13.6605 7.64804 14.2472 7.64804 14.9149H8.14804H8.64804C8.64804 13.6447 7.56926 12.6605 6.29619 12.6605V13.1605ZM15.5554 5.09032H15.0554C15.0554 5.75797 14.476 6.34471 13.7036 6.34471V6.84471V7.34471C14.9767 7.34471 16.0554 6.36051 16.0554 5.09032H15.5554ZM13.7036 6.84471V6.34471C12.9312 6.34471 12.3517 5.75797 12.3517 5.09032H11.8517H11.3517C11.3517 6.36051 12.4305 7.34471 13.7036 7.34471V6.84471ZM11.8517 5.09032H12.3517C12.3517 4.42267 12.9312 3.83594 13.7036 3.83594V3.33594V2.83594C12.4305 2.83594 11.3517 3.82013 11.3517 5.09032H11.8517ZM13.7036 3.33594V3.83594C14.476 3.83594 15.0554 4.42267 15.0554 5.09032H15.5554H16.0554C16.0554 3.82013 14.9767 2.83594 13.7036 2.83594V3.33594ZM13.7036 7.19559L13.2036 7.1913L13.1544 12.9277L13.6544 12.932L14.1544 12.9363L14.2036 7.19987L13.7036 7.19559ZM6.29619 6.84471H5.79619V13.1605H6.29619H6.79619V6.84471H6.29619ZM11.6545 14.9149V14.4149H8.14804V14.9149V15.4149H11.6545V14.9149ZM13.6544 12.932L13.1544 12.9277C13.1474 13.7511 12.4779 14.4149 11.6545 14.4149V14.9149V15.4149C13.0269 15.4149 14.1426 14.3086 14.1544 12.9363L13.6544 12.932Z" fill="#64748b"/></svg>';
@@ -19,18 +23,8 @@ function px(value: number): string {
   return `${value}px`;
 }
 
-interface SessionItem {
-  id: string;
-  title?: string;
-  updatedAt?: string;
-  parentID?: string;
-  directory?: string;
-  projectID?: string;
-  project?: ProjectSummary | null;
-}
-
 export interface SessionListViewProps {
-  gateway: OpenCodeGatewayContract;
+  client: BackendClient;
   connection: ConnectionContext | null;
   onConnectionTagChange?: (tag: ConnectionTag) => void;
   header?: JSX.Element;
@@ -101,7 +95,7 @@ function isRealProject(projectID: string | undefined): boolean {
 }
 
 function groupSessions(sessions: SessionItem[]): RepoGroup[] {
-  const projectMap = new Map<string, ProjectSummary>();
+  const projectMap = new Map<string, ProjectSummaryLike>();
   for (const session of sessions) {
     if (
       session.project &&
@@ -234,7 +228,7 @@ function countSessions(group: RepoGroup): number {
 }
 
 export function SessionListView({
-  gateway,
+  client,
   connection,
   onConnectionTagChange,
   header,
@@ -244,7 +238,7 @@ export function SessionListView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(false);
-  const subscriptionRef = useRef<OpenCodeGatewayEventSubscription | null>(null);
+  const subscriptionRef = useRef<BackendSubscription | null>(null);
 
   const fetchData = useCallback(
     async (showLoading: boolean = true) => {
@@ -255,8 +249,8 @@ export function SessionListView({
       }
 
       try {
-        const result = await gateway.sessions.list();
-        setSessions(result as SessionItem[]);
+        const result = await client.sessions.list();
+        setSessions(result.map(mapBackendSessionToSessionItem));
       } catch (fetchError) {
         if (showLoading) {
           const message =
@@ -271,7 +265,7 @@ export function SessionListView({
         }
       }
     },
-    [gateway]
+    [client]
   );
 
   useEffect(() => {
@@ -284,20 +278,14 @@ export function SessionListView({
 
   useEffect(() => {
     'background only';
-    const sub = gateway.events.subscribe({
+    const sub = client.events.subscribe({
       autoStart: true,
-      onLifecycleStateChange: (state) => {
+      onConnectionStateChange: (state) => {
         const nextTag = toConnectionTag(state.status);
         onConnectionTagChange?.(nextTag);
       },
-      onEvent: (event: { type?: string; eventType?: string }) => {
-        const actualType = event.type === 'unknown' ? event.eventType : event.type;
-        if (
-          actualType === 'session.updated' ||
-          actualType === 'session.idle' ||
-          actualType === 'message.updated' ||
-          actualType === 'message.part.updated'
-        ) {
+      onEvent: (event) => {
+        if (shouldRefreshSessionListForBackendEvent(event)) {
           fetchData(false);
         }
       },
@@ -308,7 +296,7 @@ export function SessionListView({
       sub.stop();
       subscriptionRef.current = null;
     };
-  }, [fetchData, gateway, onConnectionTagChange]);
+  }, [fetchData, client, onConnectionTagChange]);
 
   const handleOpenSession = useCallback(
     (id: string, title: string) => {

@@ -2,16 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState, useLynxGlobalEventLi
 import { close } from '../../navigation.js'
 import { px, readSafeAreaInsetsFromGlobalProps } from '../../safeArea.js'
 import { storageGet, storageSet } from '../../storage.js'
-import { createOpencodeGateway } from '../../opencode/gateway.js'
-import type { OpenCodeGatewayContract, OpenCodeGatewayEventSubscription } from '../../opencode/gateway.js'
+import {
+  createOpencodeBackendClientFromConnection,
+  findBackendModel,
+  getBackendModelReasoningEffortKeys,
+  inferSelectionFromBackendMessages,
+} from '../../backends/index.js'
 import type {
-  AgentInfo,
-  CatalogApi,
-  ModelInfo,
-  ProviderInfo,
-  SessionMessageRecord,
-  SessionPromptInput,
-} from '../../opencode/types.js'
+  BackendAgentInfo,
+  BackendClient,
+  BackendMessage,
+  BackendPromptInput,
+  BackendProviderInfo,
+  BackendSubscription,
+} from '../../backends/index.js'
 import {
   FIXTURE_AGENTS,
   FIXTURE_PROVIDERS,
@@ -22,6 +26,11 @@ import { MessageBubble } from './MessageBubble.js'
 import { ChatInput } from './ChatInput.js'
 import { PickerOverlay } from './PickerOverlay.js'
 import type { PickerOption } from './PickerOverlay.js'
+import {
+  errorMessageFromBackendEvent,
+  shouldRefreshMessagesForBackendEvent,
+  shouldStopThinkingForBackendEvent,
+} from './backend-events.js'
 
 import './App.css'
 
@@ -51,8 +60,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // instant a turn starts — before any content has streamed. Rendering that as
 // an empty bubble looks broken; skip it and let the thinking indicator fill
 // the gap until the first part arrives.
-function hasRenderableContent(msg: SessionMessageRecord): boolean {
-  if (msg.info.role !== 'assistant') return true
+function hasRenderableContent(msg: BackendMessage): boolean {
+  if (msg.role !== 'assistant') return true
   if (!Array.isArray(msg.parts) || msg.parts.length === 0) return false
   return msg.parts.some((p) => {
     const t = (p as { type?: string }).type
@@ -64,8 +73,8 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
 }
 
-function estimateMessageItemSize(msg: SessionMessageRecord): number {
-  const role = msg.info.role ?? 'assistant'
+function estimateMessageItemSize(msg: BackendMessage): number {
+  const role = msg.role ?? 'assistant'
   let score = role === 'user' ? 96 : 132
 
   for (const part of msg.parts) {
@@ -102,7 +111,7 @@ function estimateMessageItemSize(msg: SessionMessageRecord): number {
   return clamp(score, role === 'user' ? 92 : 118, 420)
 }
 
-function countVisibleMessageItems(messages: SessionMessageRecord[], includeThinking: boolean): number {
+function countVisibleMessageItems(messages: BackendMessage[], includeThinking: boolean): number {
   const visibleCount = messages.filter(hasRenderableContent).length
   return includeThinking ? visibleCount + 1 : visibleCount
 }
@@ -130,8 +139,7 @@ const CHAT_INPUT_BOTTOM_SPACING_PX = 12
 const CHAT_BOTTOM_STICK_THRESHOLD_PX = 48
 
 // Canonical order so the effort picker always shows keys left-to-right from
-// "weakest" to "strongest", regardless of how the opencode provider emitted
-// them. Keys not in this list fall through alphabetically at the end.
+// "weakest" to "strongest", regardless of provider catalog order.
 const EFFORT_ORDER = [
   'off',
   'none',
@@ -152,25 +160,12 @@ function sortEffortKeys(keys: string[]): string[] {
   return [...known, ...unknown]
 }
 
-function findModel(catalog: ProviderInfo[], providerID: string, modelID: string): ModelInfo | undefined {
-  return catalog.find(p => p.id === providerID)?.models.find(m => m.id === modelID)
-}
-
-function findProvider(catalog: ProviderInfo[], providerID: string): ProviderInfo | undefined {
-  return catalog.find(p => p.id === providerID)
-}
-
-function getVariantKeys(model: ModelInfo | undefined): string[] {
-  if (!model?.variants) return []
-  return Object.keys(model.variants)
-}
-
 function deriveAgentLabel(selection: ChatSelection): string {
   return selection.agent || 'agent'
 }
 
-function deriveModelLabel(selection: ChatSelection, catalog: ProviderInfo[]): string {
-  const model = findModel(catalog, selection.providerID, selection.modelID)
+function deriveModelLabel(selection: ChatSelection, catalog: BackendProviderInfo[]): string {
+  const model = findBackendModel(catalog, selection.providerID, selection.modelID)
   if (model) return model.name
   // Fallback: strip provider-family prefix for a short label.
   const id = selection.modelID
@@ -180,21 +175,6 @@ function deriveModelLabel(selection: ChatSelection, catalog: ProviderInfo[]): st
 
 function deriveEffortLabel(selection: ChatSelection): string {
   return selection.variant ?? EFFORT_DEFAULT_LABEL
-}
-
-function inferSelectionFromMessages(messages: SessionMessageRecord[]): Partial<ChatSelection> | null {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const info = messages[i]?.info
-    if (!info || info.role !== 'assistant') continue
-    if (!info.providerID || !info.modelID) continue
-    return {
-      agent: info.agent ?? undefined,
-      providerID: info.providerID,
-      modelID: info.modelID,
-      variant: typeof info.variant === 'string' ? info.variant : null,
-    }
-  }
-  return null
 }
 
 // Persistent storage for chip selections. Backed by the native `storage.*`
@@ -222,7 +202,7 @@ function saveStoredSelection(sessionId: string, selection: ChatSelection): void 
 }
 
 function readRouteParams(): RouteParams {
-  const globalProps = lynx.__globalProps as Record<string, unknown> | null | undefined
+  const globalProps = lynx.__globalProps as unknown as Record<string, unknown> | null | undefined
   let routeParams = globalProps?.routeParams as Record<string, unknown> | null | undefined
 
   // Some Android Lynx SDK versions do not serialise nested Maps into
@@ -267,22 +247,22 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const [messages, setMessages] = useState<SessionMessageRecord[]>([])
+  const [messages, setMessages] = useState<BackendMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [fixtureMode, setFixtureMode] = useState(false)
   const [sending, setSending] = useState(false)
   const [keyboardInsetPx, setKeyboardInsetPx] = useState(0)
-  const [providersCatalog, setProvidersCatalog] = useState<ProviderInfo[]>([])
-  const [agentsCatalog, setAgentsCatalog] = useState<AgentInfo[]>([])
+  const [providersCatalog, setProvidersCatalog] = useState<BackendProviderInfo[]>([])
+  const [agentsCatalog, setAgentsCatalog] = useState<BackendAgentInfo[]>([])
   const [providerDefaults, setProviderDefaults] = useState<Record<string, string>>({})
   const [selection, setSelection] = useState<ChatSelection>(() => ({ ...FALLBACK_SELECTION }))
   const [pickerKind, setPickerKind] = useState<PickerKind>(null)
   const [initialScrollIndex, setInitialScrollIndex] = useState<number | null>(null)
   const mountedRef = useRef(false)
-  const gatewayRef = useRef<unknown>(null)
+  const clientRef = useRef<BackendClient | null>(null)
   const msgSeqRef = useRef(0)
-  const subscriptionRef = useRef<OpenCodeGatewayEventSubscription | null>(null)
+  const subscriptionRef = useRef<BackendSubscription | null>(null)
   const refreshInFlightRef = useRef(false)
   const refreshPendingRef = useRef(false)
   const sendingRef = useRef(false)
@@ -326,7 +306,7 @@ export function App() {
     isAtBottomRef.current = distanceToBottom <= CHAT_BOTTOM_STICK_THRESHOLD_PX
   }, [])
 
-  // Selection setter that also persists to localStorage. Accepts a partial
+  // Selection setter that also persists through the native storage bridge. Accepts a partial
   // patch so callers don't need to reconstruct the full object.
   const applySelection = useCallback((patch: Partial<ChatSelection>) => {
     setSelection(prev => {
@@ -336,19 +316,18 @@ export function App() {
     })
   }, [sessionId])
 
-  const initGateway = useCallback(() => {
+  const initClient = useCallback(() => {
     'background only'
-    if (gatewayRef.current) return gatewayRef.current
+    if (clientRef.current) return clientRef.current
     if (!connection?.ip || !connection.port) return null
     try {
-      const baseUrl = `http://${connection.ip}:${connection.port}`
-      const config = {
-        baseUrl,
-        ...(connection.password ? { auth: connection.password } : {}),
-      }
-      const gw = createOpencodeGateway(config)
-      gatewayRef.current = gw
-      return gw
+      const client = createOpencodeBackendClientFromConnection({
+        ip: connection.ip,
+        port: connection.port,
+        password: connection.password,
+      })
+      clientRef.current = client
+      return client
     } catch {
       return null
     }
@@ -406,7 +385,7 @@ export function App() {
       // the async storage lookup has resolved, so a saved pick always wins.
       if (storageResolvedRef.current && !selectionInitializedRef.current) {
         selectionInitializedRef.current = true
-        const inferred = inferSelectionFromMessages(fixtureMsgs)
+        const inferred = inferSelectionFromBackendMessages(fixtureMsgs)
         if (inferred) {
           applySelection(inferred)
         } else {
@@ -443,14 +422,14 @@ export function App() {
     }
 
     try {
-      const gw = initGateway() as { sessions: { messages: (id: string) => Promise<SessionMessageRecord[]> } } | null
-      if (!gw) {
+      const client = initClient()
+      if (!client) {
         setError('No connection payload provided. Go back and reconnect first.')
         setLoading(false)
         return
       }
 
-      const result = await gw.sessions.messages(sessionId)
+      const result = await client.sessions.messages(sessionId)
       const visibleCount = countVisibleMessageItems(result, sendingRef.current)
       const shouldScrollToBottom = initialScrollDoneRef.current && isAtBottomRef.current
       setMessages(result)
@@ -471,7 +450,7 @@ export function App() {
       // pick always wins over re-inferring from older assistant messages.
       if (storageResolvedRef.current && !selectionInitializedRef.current) {
         selectionInitializedRef.current = true
-        const inferred = inferSelectionFromMessages(result)
+        const inferred = inferSelectionFromBackendMessages(result)
         if (inferred) {
           applySelection(inferred)
         }
@@ -495,7 +474,7 @@ export function App() {
         }
       }
     }
-  }, [sessionId, connection, initGateway, scrollListToBottom, applySelection])
+  }, [sessionId, connection, initClient, scrollListToBottom, applySelection])
 
   useEffect(() => {
     if (mountedRef.current) return
@@ -527,48 +506,30 @@ export function App() {
   useEffect(() => {
     'background only'
     if (!connection?.ip || !sessionId) return
-    const gw = initGateway() as OpenCodeGatewayContract | null
-    if (!gw?.events?.subscribe) return
+    const client = initClient()
+    if (!client?.events?.subscribe) return
 
-    const sub = gw.events.subscribe({
+    const sub = client.events.subscribe({
       autoStart: true,
       onEvent: (event) => {
-        // Known events expose `type` directly; unknown ones surface via `eventType`.
-        const actualType = event.type === 'unknown'
-          ? (event as { eventType?: string }).eventType
-          : event.type
-        const props = (event as { properties?: Record<string, unknown> }).properties ?? {}
+        if (event.sessionID && event.sessionID !== sessionId) return
 
-        // Extract sessionID from whichever shape the payload uses.
-        const eventSessionId =
-          (typeof props.sessionID === 'string' && props.sessionID) ||
-          (isRecord(props.info) && typeof (props.info as { sessionID?: unknown }).sessionID === 'string'
-            ? (props.info as { sessionID: string }).sessionID
-            : undefined) ||
-          (isRecord(props.part) && typeof (props.part as { sessionID?: unknown }).sessionID === 'string'
-            ? (props.part as { sessionID: string }).sessionID
-            : undefined)
-
-        if (eventSessionId && eventSessionId !== sessionId) return
-
-        if (actualType === 'message.updated' || actualType === 'message.part.updated') {
+        if (shouldRefreshMessagesForBackendEvent(event)) {
           refreshMessages(false)
           return
         }
 
-        if (actualType === 'session.idle') {
+        if (shouldStopThinkingForBackendEvent(event)) {
           updateSending(false)
-          refreshMessages(false)
+          if (event.sourceType === 'session.idle') {
+            refreshMessages(false)
+          }
           return
         }
 
-        if (actualType === 'session.error') {
+        if (event.type === 'raw' && event.sourceType === 'session.error') {
           updateSending(false)
-          const errProps = props as { error?: { data?: { message?: unknown } } }
-          const message = typeof errProps.error?.data?.message === 'string'
-            ? errProps.error.data.message
-            : 'Agent reported an error.'
-          setError(message)
+          setError(errorMessageFromBackendEvent(event))
         }
       },
     })
@@ -578,7 +539,7 @@ export function App() {
       sub.stop()
       subscriptionRef.current = null
     }
-  }, [connection, sessionId, initGateway, refreshMessages, updateSending])
+  }, [connection, sessionId, initClient, refreshMessages, updateSending])
 
   // Load provider/agent catalogs from the server once per mount. Failures are
   // logged but not surfaced — chips still work with whatever selection state
@@ -586,19 +547,19 @@ export function App() {
   useEffect(() => {
     'background only'
     if (!connection?.ip) return // fixture mode handled in refreshMessages
-    const gw = initGateway() as { catalog?: CatalogApi } | null
-    if (!gw?.catalog) return
+    const client = initClient()
+    if (!client?.catalog) return
     let cancelled = false
     void (async () => {
       try {
         const [providersRes, agentsRes] = await Promise.all([
-          gw.catalog!.providers(),
-          gw.catalog!.agents(),
+          client.catalog!.providers(),
+          client.catalog!.agents(),
         ])
         if (cancelled) return
-        setProvidersCatalog(providersRes.providers)
+        setProvidersCatalog([...providersRes.providers])
         setProviderDefaults(providersRes.defaults)
-        setAgentsCatalog(agentsRes)
+        setAgentsCatalog([...agentsRes])
         // If messages didn't supply a selection yet, fall back to server
         // defaults (first agent + first provider's default model). Still
         // gated on storage lookup so a stored pick wins.
@@ -627,7 +588,7 @@ export function App() {
     return () => {
       cancelled = true
     }
-  }, [connection, initGateway, applySelection])
+  }, [connection, initClient, applySelection])
 
   const handleBack = useCallback(() => {
     'background only'
@@ -642,13 +603,11 @@ export function App() {
     if (sendingRef.current) return
 
     const seq = ++msgSeqRef.current
-    const userMsg: SessionMessageRecord = {
-      info: {
-        id: `msg_local_${seq}`,
-        sessionID: sessionId,
-        role: 'user',
-        createdAt: new Date().toISOString(),
-      },
+    const userMsg: BackendMessage = {
+      id: `msg_local_${seq}`,
+      sessionID: sessionId,
+      role: 'user',
+      createdAt: new Date().toISOString(),
       parts: [
         {
           id: `part_local_${seq}`,
@@ -671,29 +630,29 @@ export function App() {
 
     if (fixtureMode) return
 
-    type Gateway = { sessions: { prompt: (id: string, payload: SessionPromptInput) => Promise<unknown> } }
-    const gw = initGateway() as Gateway | null
-    if (!gw) return
+    const client = initClient()
+    if (!client) return
 
     updateSending(true)
-    // Fire-and-forget: opencode's prompt endpoint blocks until the full agent response.
-    // SSE events (message.part.updated, message.updated, session.idle) drive the UI
-    // progressively; session.idle flips `sending` back off.
-    const payload: SessionPromptInput = {
-      providerID: selection.providerID,
-      modelID: selection.modelID,
+    // Fire-and-forget: OpenCode prompt completion can block until the full
+    // response. Unified backend events drive progressive UI refreshes.
+    const payload: BackendPromptInput = {
+      model: {
+        providerID: selection.providerID,
+        modelID: selection.modelID,
+      },
       agent: selection.agent,
       parts: [{ type: 'text', text }],
-      ...(selection.variant ? { variant: selection.variant } : {}),
+      ...(selection.variant ? { reasoningEffort: selection.variant } : {}),
     }
-    void gw.sessions
+    void client.sessions
       .prompt(sessionId, payload)
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : 'Failed to send message.'
         setError(message)
         updateSending(false)
       })
-  }, [sessionId, fixtureMode, initGateway, scrollListToBottom, updateSending, selection])
+  }, [sessionId, fixtureMode, initClient, scrollListToBottom, updateSending, selection])
 
   // Keyboard avoidance stays local to chat. Keyboard show/hide is low-frequency,
   // so a local inset state keeps the composer and list in sync without feeding
@@ -718,8 +677,8 @@ export function App() {
   }, [keyboardInsetPx, messages, sending, scrollListToBottom])
 
   // Derive picker data + labels from current selection + catalogs.
-  const currentModel = findModel(providersCatalog, selection.providerID, selection.modelID)
-  const variantKeys = sortEffortKeys(getVariantKeys(currentModel))
+  const currentModel = findBackendModel(providersCatalog, selection.providerID, selection.modelID)
+  const variantKeys = sortEffortKeys(getBackendModelReasoningEffortKeys(currentModel))
   const variantAvailable = variantKeys.length > 0
 
   const agentLabel = deriveAgentLabel(selection)
@@ -732,8 +691,8 @@ export function App() {
     ...(a.description ? { subtitle: a.description } : {}),
   }))
 
-  // Stable alphabetical ordering — the opencode `/config/providers` response
-  // preserves config order, which looks shuffled to end-users.
+  // Stable alphabetical ordering keeps provider-native catalog order from
+  // looking shuffled to end-users.
   const sortedProviders = [...providersCatalog]
     .sort((a, b) => a.name.localeCompare(b.name))
   const modelOptions: PickerOption[] = sortedProviders.flatMap(p =>
@@ -785,8 +744,8 @@ export function App() {
     if (slash < 0) return
     const providerID = key.slice(0, slash)
     const modelID = key.slice(slash + 1)
-    const newModel = findModel(providersCatalog, providerID, modelID)
-    const newVariantKeys = getVariantKeys(newModel)
+    const newModel = findBackendModel(providersCatalog, providerID, modelID)
+    const newVariantKeys = getBackendModelReasoningEffortKeys(newModel)
     setSelection(prev => {
       // Preserve variant only if still valid on the new model.
       const nextVariant = prev.variant && newVariantKeys.includes(prev.variant)
@@ -883,14 +842,14 @@ export function App() {
                 >
                   {visibleMessages.map((msg) => (
                     <list-item
-                      item-key={msg.info.id}
-                      key={msg.info.id}
+                      item-key={msg.id}
+                      key={msg.id}
                       estimated-main-axis-size-px={estimateMessageItemSize(msg)}
                     >
                       <MessageBubble
-                        role={msg.info.role ?? 'assistant'}
+                        role={msg.role ?? 'assistant'}
                         parts={msg.parts}
-                        createdAt={msg.info.createdAt}
+                        createdAt={msg.createdAt}
                       />
                     </list-item>
                   ))}

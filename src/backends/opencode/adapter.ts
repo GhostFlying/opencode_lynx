@@ -124,7 +124,7 @@ function toBackendMessage(message: SessionMessageRecord): BackendMessage {
     role: toBackendMessageRole(message.info.role),
     ...(typeof message.info.createdAt === 'string' ? { createdAt: message.info.createdAt } : {}),
     ...(typeof message.info.completedAt === 'string' ? { completedAt: message.info.completedAt } : {}),
-    parts: message.parts,
+    parts: message.parts.map(part => isRecord(part) ? part : { value: part }),
     backendMeta: {
       ...(typeof message.info.providerID === 'string' ? { providerID: message.info.providerID } : {}),
       ...(typeof message.info.modelID === 'string' ? { modelID: message.info.modelID } : {}),
@@ -193,6 +193,26 @@ function readEventField(
   return undefined
 }
 
+function readNestedEventField(
+  properties: Record<string, unknown>,
+  containers: readonly string[],
+  keys: readonly string[],
+): string | undefined {
+  for (const containerKey of containers) {
+    const container = properties[containerKey]
+    if (!isRecord(container)) {
+      continue
+    }
+
+    const value = readEventField(container, keys)
+    if (value) {
+      return value
+    }
+  }
+
+  return undefined
+}
+
 function toPayload(properties: unknown): Record<string, unknown> {
   if (isRecord(properties)) {
     return properties
@@ -203,9 +223,24 @@ function toPayload(properties: unknown): Record<string, unknown> {
 
 function toBackendEvent(event: OpencodeEvent): BackendEvent {
   const payload = toPayload(event.properties)
-  const sessionID = readEventField(payload, ['sessionID', 'sessionId', 'session_id'])
-  const messageID = readEventField(payload, ['messageID', 'messageId', 'message_id'])
-  const partID = readEventField(payload, ['partID', 'partId', 'part_id'])
+  const sessionID =
+    readEventField(payload, ['sessionID', 'sessionId', 'session_id']) ??
+    readNestedEventField(payload, ['info', 'part', 'message'], [
+      'sessionID',
+      'sessionId',
+      'session_id',
+    ])
+  const messageID =
+    readEventField(payload, ['messageID', 'messageId', 'message_id']) ??
+    readNestedEventField(payload, ['info', 'part', 'message'], [
+      'messageID',
+      'messageId',
+      'message_id',
+      'id',
+    ])
+  const partID =
+    readEventField(payload, ['partID', 'partId', 'part_id']) ??
+    readNestedEventField(payload, ['part'], ['partID', 'partId', 'part_id', 'id'])
 
   if (event.type === 'unknown') {
     return {

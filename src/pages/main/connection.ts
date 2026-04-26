@@ -1,7 +1,6 @@
-import { createOpencodeGateway } from '../../opencode/gateway.js';
-import type { OpenCodeGatewayContract } from '../../opencode/gateway.js';
+import { connectOpencodeBackendClient } from '../../backends/index.js';
+import type { BackendClient, BackendConnectionState } from '../../backends/index.js';
 import { storageGet, storageRemove, storageSet } from '../../storage.js';
-import type { SseLifecycleStatus } from '../../opencode/events.js';
 
 const STORAGE_KEY = 'opencode_connection';
 const SAVED_CONNECTION_RETRY_DELAYS_MS = [0, 120, 320] as const;
@@ -17,7 +16,7 @@ export interface ConnectionContext {
 }
 
 export interface ConnectionAttemptResult {
-  gateway: OpenCodeGatewayContract;
+  client: BackendClient;
   connection: ConnectionContext;
   serverLabel: string;
 }
@@ -162,7 +161,7 @@ export function connectionTagTone(tag: ConnectionTag): 'online' | 'warning' | 'o
   }
 }
 
-export function toConnectionTag(status: SseLifecycleStatus): ConnectionTag {
+export function toConnectionTag(status: BackendConnectionState): ConnectionTag {
   switch (status) {
     case 'open':
       return 'Online';
@@ -191,26 +190,16 @@ export function validateConnection(connection: ConnectionContext): string | null
   return null;
 }
 
-export async function connectToGateway(
+export async function connectToBackendClient(
   connection: ConnectionContext
 ): Promise<ConnectionAttemptResult> {
-  const normalized = normalizeConnection(connection);
-  const validationError = validateConnection(normalized);
-  if (validationError) {
-    throw new Error(validationError);
-  }
-
-  const gateway = createOpencodeGateway({
-    baseUrl: formatEndpoint(normalized),
-    ...(normalized.password ? { auth: normalized.password } : {}),
-  });
-
-  await gateway.sessions.list();
+  const result = await connectOpencodeBackendClient(connection);
+  const normalized = result.connection;
   saveConnection(normalized);
 
   return {
-    gateway,
+    client: result.client,
     connection: normalized,
-    serverLabel: formatServerLabel(normalized),
+    serverLabel: result.serverLabel,
   };
 }
