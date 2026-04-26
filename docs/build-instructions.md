@@ -63,6 +63,9 @@ pnpm run gate:android-smoke
 ```
 
 Use those optional smoke commands when a change affects native host behavior, startup routing, or deeplink handling.
+The core iOS and Android smoke path launches the dedicated `qa-test.lynx.bundle`
+so it can verify deeplink startup and second-page navigation without coupling
+those assertions to the production `main.lynx.bundle` UI.
 
 ## Maintainer-only local-gate note
 

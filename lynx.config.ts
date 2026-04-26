@@ -10,6 +10,7 @@ export default defineConfig({
       main: './src/pages/main/index.tsx',
       second: './src/pages/second/index.tsx',
       chat: './src/pages/chat/index.tsx',
+      'qa-test': './src/pages/qa-test/index.tsx',
     },
   },
   output: {

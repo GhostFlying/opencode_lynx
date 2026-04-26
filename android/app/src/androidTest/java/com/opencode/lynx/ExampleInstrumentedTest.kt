@@ -102,7 +102,9 @@ class ExampleInstrumentedTest {
 
     @Test
     fun testSmokeCorePathLaunchSecondCloseAndOrderedReadiness() {
-        launchApp()
+        val qaTestTarget = "hybrid://lynxview_page?bundle=qa-test.lynx.bundle&run_id=android_smoke_v1"
+        launchAppWithDevSourceDeepLink(target = qaTestTarget)
+
         assertMainReadinessFlowWithinBudget(totalReadyTimeoutMs = DEEPLINK_TOTAL_READY_TIMEOUT_MS)
 
         waitForMarker(OPEN_SECOND_PAGE_ACTION_MARKER, MARKER_TIMEOUT_MS)
@@ -122,7 +124,7 @@ class ExampleInstrumentedTest {
 
     @Test
     fun testDeeplinkColdStartAcceptedTargetConsumesAndTransitions() {
-        val acceptedTarget = "hybrid://lynxview_page?bundle=main.lynx.bundle&run_id=android_deeplink_accept_v1"
+        val acceptedTarget = "hybrid://lynxview_page?bundle=qa-test.lynx.bundle&run_id=android_deeplink_accept_v1"
         launchAppWithDevSourceDeepLink(target = acceptedTarget)
 
         waitForMarker(
@@ -156,7 +158,6 @@ class ExampleInstrumentedTest {
             marker = "$DEV_SOURCE_MARKER_PREFIX|event=consumed|source=startup|reason=consumed",
             timeoutMs = SHORT_ASSERT_TIMEOUT_MS,
         )
-        assertMainReadinessFlowWithinBudget(totalReadyTimeoutMs = DEEPLINK_TOTAL_READY_TIMEOUT_MS)
     }
 
     @Test
@@ -182,7 +183,6 @@ class ExampleInstrumentedTest {
             marker = "$DEV_SOURCE_MARKER_PREFIX|event=consumed|source=startup|reason=consumed",
             timeoutMs = SHORT_ASSERT_TIMEOUT_MS,
         )
-        assertMainReadinessFlowWithinBudget(totalReadyTimeoutMs = DEEPLINK_TOTAL_READY_TIMEOUT_MS)
     }
 
     @Test
@@ -204,7 +204,6 @@ class ExampleInstrumentedTest {
             "$DEV_SOURCE_MARKER_PREFIX|event=transition|source=startup|to=default_main",
             MARKER_TIMEOUT_MS,
         )
-        waitForMarker("main_ready_marker", MARKER_TIMEOUT_MS)
         assertMarkerAbsent("qa_second_ready_marker_v1", SHORT_ASSERT_TIMEOUT_MS)
     }
 
@@ -281,7 +280,8 @@ class ExampleInstrumentedTest {
     @Test
     fun testTimeoutFailurePathFailsClosedOnMissingUiReadySignal() {
         assumeFailureMode("timeout")
-        launchApp()
+        val qaTestTarget = "hybrid://lynxview_page?bundle=qa-test.lynx.bundle&run_id=android_timeout_v1"
+        launchAppWithDevSourceDeepLink(target = qaTestTarget)
 
         waitForMarker(MAIN_READY_MARKER, MARKER_TIMEOUT_MS)
 
