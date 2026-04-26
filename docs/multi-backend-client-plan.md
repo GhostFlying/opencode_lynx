@@ -14,7 +14,8 @@ Today, the repository ships:
 
 - a Lynx mobile client wrapper centered on OpenCode transport and session flows
 - native bridge networking for REST and SSE
-- an internal `src/backends/` layer with shared types, registry, facade, and an early OpenCode adapter
+- a `src/backends/` layer with shared types, registry, facade, and the OpenCode adapter
+- production `main` and `chat` pages using the backend facade for OpenCode
 - no Codex or Claude adapter implementation yet
 
 ## Problem Statement
@@ -292,7 +293,8 @@ Current repository checkpoint:
 - `src/backends/index.ts` re-exports the internal API
 - `src/backends/registry.ts` and `src/backends/facade.ts` exist for internal use
 - `src/backends/opencode/adapter.ts` exists as the first provider implementation
-- current pages still import `src/opencode/` directly
+- `src/pages/main` and `src/pages/chat` consume `BackendClient` through the
+  OpenCode backend facade helper path
 
 ## Unified Event Model
 
@@ -449,16 +451,17 @@ The UI should branch based on these capability flags instead of checking provide
 - keep `src/opencode/` unchanged in responsibility
 - add `src/backends/types.ts`
 - add `src/backends/index.ts`
-- do not migrate pages yet
+- completed before page migration
 
 ### Phase 2: Preserve and wrap OpenCode
 
 - add `src/backends/opencode/adapter.ts`
 - add `src/backends/registry.ts` and `src/backends/facade.ts`
-- keep the new layer internal first
-- do not refactor pages in the same step
+- completed; the layer is now used by the OpenCode production page path
 
 ### Phase 3: Introduce backend channel bridge
+
+Status: deferred.
 
 - define native `backend.channel.*` bridge contract
 - implement a no-op or stubbed host-backed channel
@@ -479,11 +482,16 @@ The UI should branch based on these capability flags instead of checking provide
 
 ### Phase 6: Shared UI polish and migration
 
+Status: partially complete for OpenCode page migration.
+
 - unify approval cards
 - unify tool-call timeline rendering
 - unify session list cards
 - unify reconnect/resync UI
 - migrate pages to the backend facade once OpenCode parity is verified
+  - complete for the OpenCode production path on `main` and `chat`
+  - Codex, Claude, backend channel bridge, and backend selection UI remain
+    deferred
 
 ## Risks
 

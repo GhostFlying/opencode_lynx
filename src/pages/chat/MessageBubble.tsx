@@ -10,7 +10,7 @@ import { GenericPartView } from './parts/GenericPart.js'
 
 export interface MessageBubbleProps {
   role: string
-  parts: unknown[]
+  parts: ReadonlyArray<unknown>
   createdAt?: string
 }
 

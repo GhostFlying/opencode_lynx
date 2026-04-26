@@ -180,10 +180,9 @@ final class OpenCodeLynxUITests: XCTestCase {
     @MainActor
     func testMainFlowOpensChatWithSavedConnectionAndRouteParams() throws {
         // This test requires an OpenCode-shaped HTTP server on 127.0.0.1:3000.
-        // Locally, if the server is absent, skip so a bare `xcodebuild test`
-        // run stays green.
         guard isLocalTestServerAvailable() else {
-            throw XCTSkip("Local test server on 127.0.0.1:3000 is not available")
+            XCTFail("Local test server on 127.0.0.1:3000 is required for the server-backed main flow")
+            return
         }
 
         let app = XCUIApplication()

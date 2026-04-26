@@ -10,14 +10,15 @@ forcing `src/opencode/` to become a fake generic transport layer.
 
 Current stage:
 
-- phase 2 early internal implementation
+- OpenCode production page path is migrated to this facade
 - types, registry, facade, and OpenCode adapter exist
 - Codex and Claude remain unimplemented
-- adapter behavior is covered by focused unit tests intended to support a
-  future page-level switch from direct `src/opencode/` imports to the facade
+- adapter behavior is covered by focused unit tests and page-level facade
+  migration tests
 - OpenCode facade readiness is also covered by local mock HTTP/SSE integration
   tests, not only object-level stubs
-- current pages still consume `src/opencode/` directly
+- `main` and `chat` pages consume `BackendClient` from this layer instead of
+  importing the OpenCode wrapper directly
 
 ## Design Rules
 
@@ -25,6 +26,8 @@ Current stage:
 - Keep provider-neutral contracts thin and UI-oriented.
 - Do not invent a fake common wire protocol for OpenCode, Codex, and Claude.
 - Do not move host/native responsibilities into this layer.
+- Page code should depend on `BackendClient`; direct `src/opencode/` imports
+  belong in the OpenCode adapter, wrapper tests, and documentation only.
 
 ## Current Contents
 
@@ -43,8 +46,11 @@ Current stage:
   - thin adapter that maps the current OpenCode gateway into the shared
     backend-neutral contract
 - `opencode/page-migration.ts`
-  - thin helper layer for future page migration, so current page code can move
-    connection/config/client creation onto the backend facade incrementally
+  - thin helper layer used by page code for OpenCode connection/config/client
+    creation through the backend facade
+- `ui-mappers.ts`
+  - small page-facing helpers for backend-neutral chat selection inference and
+    catalog lookup
 
 ## Deferred Work
 
@@ -53,5 +59,6 @@ The following items are intentionally not implemented yet:
 - Codex adapter
 - Claude adapter
 - backend-native bridge contracts
+- backend selection UI
 
 Those arrive in later phases after OpenCode parity is validated.

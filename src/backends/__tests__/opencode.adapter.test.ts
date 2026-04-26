@@ -8,14 +8,15 @@ import type {
   OpenCodeGatewaySubscribeOptions,
 } from '../../opencode/gateway.js'
 import type { SessionPromptInput } from '../../opencode/types.js'
+import { OpencodeWrapperError } from '../../opencode/errors.js'
 
 function createMockGateway() {
-  let lifecycleState = {
+  let lifecycleState: ReturnType<OpenCodeGatewayEventSubscription['getLifecycleState']> = {
     status: 'idle',
     retryAttempt: 0,
     nextRetryInMs: null,
     reason: null,
-  } as const
+  }
 
   let subscribeOptions: OpenCodeGatewaySubscribeOptions | undefined
 
@@ -590,6 +591,63 @@ describe('opencode backend adapter', () => {
 
     forwardedOptions.onEvent?.({
       type: 'unknown',
+      eventType: 'session.error',
+      properties: {
+        info: {
+          sessionID: 'session-2',
+        },
+        error: {
+          data: {
+            message: 'agent failed',
+          },
+        },
+      },
+    } as never, {
+      action: {
+        type: 'accepted',
+        eventName: 'session.error',
+        refetchRequired: false,
+      },
+      state: {
+        seenEventIds: [],
+        lastSequenceByKey: {},
+      },
+      raw: 'raw-error',
+    })
+
+    expect(onEvent).toHaveBeenCalledWith({
+      backend: 'opencode',
+      type: 'raw',
+      raw: {
+        type: 'unknown',
+        eventType: 'session.error',
+        properties: {
+          info: {
+            sessionID: 'session-2',
+          },
+          error: {
+            data: {
+              message: 'agent failed',
+            },
+          },
+        },
+      },
+      sourceType: 'session.error',
+      payload: {
+        info: {
+          sessionID: 'session-2',
+        },
+        error: {
+          data: {
+            message: 'agent failed',
+          },
+        },
+      },
+      sessionID: 'session-2',
+    })
+
+    forwardedOptions.onEvent?.({
+      type: 'unknown',
       eventType: 'provider.changed',
       properties: 'bad-payload',
     } as never, {
@@ -742,7 +800,9 @@ describe('opencode backend adapter', () => {
       partID: 'part-1',
     })
 
-    const upstreamError = new Error('stream failed')
+    const upstreamError = new OpencodeWrapperError('stream failed', {
+      code: 'unknown',
+    })
     forwardedOptions.onError?.(upstreamError)
     expect(onError).toHaveBeenCalledWith(upstreamError)
 
