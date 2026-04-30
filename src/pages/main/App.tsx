@@ -3,6 +3,7 @@ import { Button, KeyboardAwareResponder, KeyboardAwareRoot } from '@lynx-js/lynx
 
 import './App.css';
 import appLogo from '../../assets/app_icon.png';
+import { open } from '../../navigation.js';
 import { LandingView } from './LandingView.js';
 import { SessionListView } from './SessionListView.js';
 import { SettingsView } from './SettingsView.js';
@@ -151,6 +152,20 @@ function plusIcon(): string {
   return '+';
 }
 
+export function buildNewSessionScheme(
+  connection: ConnectionContext,
+  knownDirectories: string[]
+): string {
+  const routeParams = encodeURIComponent(
+    JSON.stringify({
+      connection,
+      isNewSession: true,
+      knownDirectories,
+    })
+  );
+  return `hybrid://lynxview?bundle=.%2Fchat.lynx.bundle&hide_nav_bar=1&route_params=${routeParams}`;
+}
+
 function chromeShellClassName(view: ViewState): string {
   return view === 'connected' ? 'chrome-shell chrome-shell--connected' : 'chrome-shell';
 }
@@ -196,6 +211,7 @@ export function App({
   const [connectionError, setConnectionError] = useState('');
   const [connectionTag, setConnectionTag] = useState<ConnectionTag>('Idle');
   const [hydrated, setHydrated] = useState(false);
+  const [knownDirectories, setKnownDirectories] = useState<string[]>([]);
   const clientRef = useRef<BackendClient | null>(null);
   const connectingRef = useRef(false);
   const autoConnectRef = useRef(true);
@@ -556,8 +572,9 @@ export function App({
 
   const handlePlusTap = useCallback(() => {
     'background only';
-    console.info('main_plus_placeholder_tapped');
-  }, []);
+    const scheme = buildNewSessionScheme(connection, knownDirectories);
+    open({ scheme }, () => undefined);
+  }, [connection, knownDirectories]);
 
   return (
     <view className="main-page">
@@ -613,6 +630,7 @@ export function App({
                       client={clientRef.current}
                       connection={connection}
                       onConnectionTagChange={setConnectionTag}
+                      onKnownDirectoriesChange={setKnownDirectories}
                       header={
                         <view className="topbar topbar--content" style={connectedTopbarStyle}>
                           <view className="topbar__brand">

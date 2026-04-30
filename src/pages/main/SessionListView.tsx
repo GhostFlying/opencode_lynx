@@ -8,6 +8,7 @@ import type {
 import type { ConnectionContext, ConnectionTag } from './connection.js';
 import { toConnectionTag } from './connection.js';
 import {
+  extractKnownDirectories,
   mapBackendSessionToSessionItem,
   shouldRefreshSessionListForBackendEvent,
 } from './session-list-model.js';
@@ -27,6 +28,7 @@ export interface SessionListViewProps {
   client: BackendClient;
   connection: ConnectionContext | null;
   onConnectionTagChange?: (tag: ConnectionTag) => void;
+  onKnownDirectoriesChange?: (directories: string[]) => void;
   header?: JSX.Element;
   contentInsetBottom?: number;
 }
@@ -231,6 +233,7 @@ export function SessionListView({
   client,
   connection,
   onConnectionTagChange,
+  onKnownDirectoriesChange,
   header,
   contentInsetBottom = 146,
 }: SessionListViewProps) {
@@ -250,7 +253,9 @@ export function SessionListView({
 
       try {
         const result = await client.sessions.list();
-        setSessions(result.map(mapBackendSessionToSessionItem));
+        const items = result.map(mapBackendSessionToSessionItem);
+        setSessions(items);
+        onKnownDirectoriesChange?.(extractKnownDirectories(items));
       } catch (fetchError) {
         if (showLoading) {
           const message =
@@ -265,7 +270,7 @@ export function SessionListView({
         }
       }
     },
-    [client]
+    [client, onKnownDirectoriesChange]
   );
 
   useEffect(() => {

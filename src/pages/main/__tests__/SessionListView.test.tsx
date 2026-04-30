@@ -12,6 +12,8 @@ import type {
 import { open } from '../../../navigation.js'
 import { SessionListView } from '../SessionListView.js'
 import {
+  KNOWN_DIRECTORY_LIMIT,
+  extractKnownDirectories,
   mapBackendSessionToSessionItem,
   shouldRefreshSessionListForBackendEvent,
 } from '../session-list-model.js'
@@ -136,6 +138,33 @@ describe('SessionListView backend facade behavior', () => {
     })
   })
 
+  it('caps extractKnownDirectories at KNOWN_DIRECTORY_LIMIT, keeping the most recent', () => {
+    const sessions = Array.from({ length: KNOWN_DIRECTORY_LIMIT + 4 }, (_, idx) => ({
+      id: `s${idx}`,
+      directory: `/repo/dir-${idx}`,
+      // Higher idx → later updatedAt, so newest dirs are dir-N..dir-(N-LIMIT+1)
+      updatedAt: `2026-04-26T${String(idx).padStart(2, '0')}:00:00.000Z`,
+    }))
+    const result = extractKnownDirectories(sessions)
+    expect(result).toHaveLength(KNOWN_DIRECTORY_LIMIT)
+    const lastIdx = sessions.length - 1
+    expect(result[0]).toBe(`/repo/dir-${lastIdx}`)
+    expect(result[result.length - 1]).toBe(`/repo/dir-${lastIdx - KNOWN_DIRECTORY_LIMIT + 1}`)
+  })
+
+  it('extracts known directories deduped and ordered by recency', () => {
+    expect(
+      extractKnownDirectories([
+        { id: 's1', directory: '/repo/a', updatedAt: '2026-04-26T01:00:00.000Z' },
+        { id: 's2', directory: '/repo/b', updatedAt: '2026-04-26T03:00:00.000Z' },
+        { id: 's3', directory: '/repo/a', updatedAt: '2026-04-26T05:00:00.000Z' },
+        { id: 's4', directory: '', updatedAt: '2026-04-26T06:00:00.000Z' },
+        { id: 's5' },
+        { id: 's6', directory: '/repo/c' },
+      ]),
+    ).toEqual(['/repo/a', '/repo/b', '/repo/c'])
+  })
+
   it('refreshes from unified backend events that matter to the session list', () => {
     const refreshEvents: BackendEvent[] = [
       {
@@ -179,6 +208,7 @@ describe('SessionListView backend facade behavior', () => {
 
   it('lists sessions, tracks connection lifecycle, refreshes silently, and opens chat with route params', async () => {
     const onConnectionTagChange = vi.fn()
+    const onKnownDirectoriesChange = vi.fn()
     const { client, list, getSubscribeOptions, subscription } = createClient()
 
     const result = render(
@@ -186,6 +216,7 @@ describe('SessionListView backend facade behavior', () => {
         client={client}
         connection={{ ip: '127.0.0.1', port: '3000', password: 'secret' }}
         onConnectionTagChange={onConnectionTagChange}
+        onKnownDirectoriesChange={onKnownDirectoriesChange}
       />,
     )
 
@@ -193,6 +224,9 @@ describe('SessionListView backend facade behavior', () => {
     expect(await result.findByText('opencode_lynx')).toBeInTheDocument()
     expect(list).toHaveBeenCalledTimes(1)
     expect(onConnectionTagChange).toHaveBeenCalledWith('Online')
+    await waitFor(() => {
+      expect(onKnownDirectoriesChange).toHaveBeenCalledWith(['/repo/opencode_lynx'])
+    })
 
     act(() => {
       getSubscribeOptions()?.onEvent?.({
