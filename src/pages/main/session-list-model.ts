@@ -45,6 +45,33 @@ export function mapBackendSessionToSessionItem(session: BackendSessionSummary): 
   }
 }
 
+// Cap to keep the new-session card chip strip readable and the route_params
+// payload from ballooning. Heavy users can have dozens of unique worktrees;
+// past that, "preset" stops being a shortcut. Free-text input remains as
+// fallback for paths that fall off the tail.
+export const KNOWN_DIRECTORY_LIMIT = 8
+
+export function extractKnownDirectories(sessions: SessionItem[]): string[] {
+  const latestByDir = new Map<string, string>()
+  for (const session of sessions) {
+    const dir = session.directory
+    if (typeof dir !== 'string' || dir.length === 0) continue
+    const existing = latestByDir.get(dir)
+    const updatedAt = session.updatedAt ?? ''
+    if (existing === undefined || updatedAt > existing) {
+      latestByDir.set(dir, updatedAt)
+    }
+  }
+
+  return Array.from(latestByDir.entries())
+    .sort((left, right) => {
+      if (left[1] === right[1]) return left[0].localeCompare(right[0])
+      return right[1].localeCompare(left[1])
+    })
+    .slice(0, KNOWN_DIRECTORY_LIMIT)
+    .map(([dir]) => dir)
+}
+
 export function shouldRefreshSessionListForBackendEvent(event: BackendEvent): boolean {
   if (
     event.type === 'session.updated' ||

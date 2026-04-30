@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useLynxGlobalEventListener } from '@lynx-js/react'
+import { useCallback, useEffect, useMemo, useRef, useState } from '@lynx-js/react'
+import { KeyboardAwareResponder, KeyboardAwareRoot } from '@lynx-js/lynx-ui'
 import { close } from '../../navigation.js'
 import { px, readSafeAreaInsetsFromGlobalProps } from '../../safeArea.js'
 import { storageGet, storageSet } from '../../storage.js'
@@ -24,6 +25,7 @@ import {
 } from './fixtures.js'
 import { MessageBubble } from './MessageBubble.js'
 import { ChatInput } from './ChatInput.js'
+import { NewSessionCard } from './NewSessionCard.js'
 import { PickerOverlay } from './PickerOverlay.js'
 import type { PickerOption } from './PickerOverlay.js'
 import {
@@ -31,20 +33,13 @@ import {
   shouldRefreshMessagesForBackendEvent,
   shouldStopThinkingForBackendEvent,
 } from './backend-events.js'
+import {
+  parseChatRouteParams,
+  seedNewSessionDefaults,
+} from './new-session-model.js'
+import type { ChatRouteParams } from './new-session-model.js'
 
 import './App.css'
-
-interface ConnectionPayload {
-  ip?: string
-  port?: string
-  password?: string
-}
-
-interface RouteParams {
-  sessionId?: string
-  sessionTitle?: string
-  connection?: ConnectionPayload
-}
 
 interface ChatListScrollDetail {
   scrollTop?: number
@@ -201,64 +196,29 @@ function saveStoredSelection(sessionId: string, selection: ChatSelection): void 
   void storageSet(selectionStorageKey(sessionId), JSON.stringify(selection))
 }
 
-function readRouteParams(): RouteParams {
-  const globalProps = lynx.__globalProps as unknown as Record<string, unknown> | null | undefined
-  let routeParams = globalProps?.routeParams as Record<string, unknown> | null | undefined
-
-  // Some Android Lynx SDK versions do not serialise nested Maps into
-  // globalProps. queryItems keeps the raw route_params string as a fallback.
-  if (!routeParams) {
-    const queryItems = globalProps?.queryItems as Record<string, string> | null | undefined
-    const routeParamsRaw = queryItems?.route_params
-    if (typeof routeParamsRaw === 'string') {
-      try {
-        routeParams = JSON.parse(routeParamsRaw) as Record<string, unknown>
-      } catch {
-        // ignore parse error
-      }
-    }
-  }
-
-  const connection = routeParams?.connection as Record<string, unknown> | null | undefined
-  return {
-    sessionId: typeof routeParams?.sessionId === 'string' ? routeParams.sessionId : undefined,
-    sessionTitle: typeof routeParams?.sessionTitle === 'string' ? routeParams.sessionTitle : undefined,
-    connection: connection
-      ? {
-          ip: typeof connection.ip === 'string' ? connection.ip : undefined,
-          port: typeof connection.port === 'string' ? connection.port : undefined,
-          password: typeof connection.password === 'string' ? connection.password : undefined,
-        }
-      : undefined,
-  }
-}
-
 export function App() {
   // Route params come from __globalProps — a fresh object each render. Freeze
   // the extracted values with useMemo([]) so they are reference-stable; any
   // effect that depends on them must not resubscribe on every render.
-  const { sessionId, sessionTitle, connection } = useMemo(() => {
-    const rp = readRouteParams()
-    return {
-      sessionId: rp.sessionId ?? '',
-      sessionTitle: rp.sessionTitle ?? 'Chat',
-      connection: rp.connection,
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const initialRoute = useMemo<ChatRouteParams>(() => parseChatRouteParams(lynx.__globalProps), [])
+  const isNewSession = !initialRoute.sessionId
+  const sessionTitle = initialRoute.sessionTitle ?? (isNewSession ? 'New session' : 'Chat')
+  const connection = initialRoute.connection
+  const knownDirectories = useMemo(() => initialRoute.knownDirectories ?? [], [initialRoute])
+  const [sessionId, setSessionId] = useState<string>(initialRoute.sessionId ?? '')
 
   const [messages, setMessages] = useState<BackendMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [fixtureMode, setFixtureMode] = useState(false)
   const [sending, setSending] = useState(false)
-  const [keyboardInsetPx, setKeyboardInsetPx] = useState(0)
   const [providersCatalog, setProvidersCatalog] = useState<BackendProviderInfo[]>([])
   const [agentsCatalog, setAgentsCatalog] = useState<BackendAgentInfo[]>([])
   const [providerDefaults, setProviderDefaults] = useState<Record<string, string>>({})
   const [selection, setSelection] = useState<ChatSelection>(() => ({ ...FALLBACK_SELECTION }))
   const [pickerKind, setPickerKind] = useState<PickerKind>(null)
   const [initialScrollIndex, setInitialScrollIndex] = useState<number | null>(null)
+  const [pendingDirectory, setPendingDirectory] = useState<string>('')
   const mountedRef = useRef(false)
   const clientRef = useRef<BackendClient | null>(null)
   const msgSeqRef = useRef(0)
@@ -277,10 +237,6 @@ export function App() {
   const safeAreaInsets = readSafeAreaInsetsFromGlobalProps()
   const chatHeaderStyle = {
     paddingTop: px(safeAreaInsets.top + CHAT_HEADER_TOP_SPACING_PX),
-  }
-  const chatBodyStyle = {
-    transform: `translateY(-${keyboardInsetPx}px)`,
-    transition: keyboardInsetPx > 0 ? 'transform 0.3s' : 'transform 0.1s',
   }
   const chatInputAreaStyle = {
     paddingBottom: px(safeAreaInsets.bottom + CHAT_INPUT_BOTTOM_SPACING_PX),
@@ -402,6 +358,13 @@ export function App() {
     }
 
     if (!sessionId) {
+      // New-session flow: card is rendered above the empty list; do not
+      // surface an error and stay out of loading.
+      if (isNewSession) {
+        setMessages([])
+        setLoading(false)
+        return
+      }
       setError('No session ID provided.')
       setLoading(false)
       return
@@ -474,7 +437,7 @@ export function App() {
         }
       }
     }
-  }, [sessionId, connection, initClient, scrollListToBottom, applySelection])
+  }, [sessionId, connection, initClient, scrollListToBottom, applySelection, isNewSession])
 
   useEffect(() => {
     if (mountedRef.current) return
@@ -602,23 +565,71 @@ export function App() {
     // holds an older `onSend` reference.
     if (sendingRef.current) return
 
-    const seq = ++msgSeqRef.current
-    const userMsg: BackendMessage = {
-      id: `msg_local_${seq}`,
-      sessionID: sessionId,
-      role: 'user',
-      createdAt: new Date().toISOString(),
-      parts: [
-        {
-          id: `part_local_${seq}`,
-          sessionID: sessionId,
-          messageID: `msg_local_${seq}`,
-          type: 'text',
-          text,
-        },
-      ],
+    const buildOptimisticUserMessage = (boundSessionId: string): BackendMessage => {
+      const seq = ++msgSeqRef.current
+      return {
+        id: `msg_local_${seq}`,
+        sessionID: boundSessionId,
+        role: 'user',
+        createdAt: new Date().toISOString(),
+        parts: [
+          {
+            id: `part_local_${seq}`,
+            sessionID: boundSessionId,
+            messageID: `msg_local_${seq}`,
+            type: 'text',
+            text,
+          },
+        ],
+      }
     }
 
+    const buildPayload = (): BackendPromptInput => ({
+      model: {
+        providerID: selection.providerID,
+        modelID: selection.modelID,
+      },
+      agent: selection.agent,
+      parts: [{ type: 'text', text }],
+      ...(selection.variant ? { reasoningEffort: selection.variant } : {}),
+    })
+
+    if (isNewSession && !sessionId) {
+      const client = initClient()
+      if (!client) {
+        setError('No connection payload provided. Go back and reconnect first.')
+        return
+      }
+
+      updateSending(true)
+      try {
+        const directory = pendingDirectory.trim()
+        const created = await client.sessions.create(
+          directory.length > 0 ? { directory } : undefined,
+        )
+        const newId = created.id
+        const optimistic = buildOptimisticUserMessage(newId)
+        setMessages([optimistic])
+        saveStoredSelection(newId, selection)
+        setSessionId(newId)
+
+        const payload = buildPayload()
+        void client.sessions
+          .prompt(newId, payload)
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : 'Failed to send message.'
+            setError(message)
+            updateSending(false)
+          })
+      } catch (err) {
+        updateSending(false)
+        const message = err instanceof Error ? err.message : 'Failed to create session.'
+        setError(message)
+      }
+      return
+    }
+
+    const userMsg = buildOptimisticUserMessage(sessionId)
     const shouldStickToBottom = isAtBottomRef.current
     setMessages(prev => {
       const next = [...prev, userMsg]
@@ -636,15 +647,7 @@ export function App() {
     updateSending(true)
     // Fire-and-forget: OpenCode prompt completion can block until the full
     // response. Unified backend events drive progressive UI refreshes.
-    const payload: BackendPromptInput = {
-      model: {
-        providerID: selection.providerID,
-        modelID: selection.modelID,
-      },
-      agent: selection.agent,
-      parts: [{ type: 'text', text }],
-      ...(selection.variant ? { reasoningEffort: selection.variant } : {}),
-    }
+    const payload = buildPayload()
     void client.sessions
       .prompt(sessionId, payload)
       .catch((err: unknown) => {
@@ -652,29 +655,22 @@ export function App() {
         setError(message)
         updateSending(false)
       })
-  }, [sessionId, fixtureMode, initClient, scrollListToBottom, updateSending, selection])
+  }, [
+    sessionId,
+    fixtureMode,
+    initClient,
+    scrollListToBottom,
+    updateSending,
+    selection,
+    isNewSession,
+    pendingDirectory,
+  ])
 
-  // Keyboard avoidance stays local to chat. Keyboard show/hide is low-frequency,
-  // so a local inset state keeps the composer and list in sync without feeding
-  // keyboard height through global props.
-  useLynxGlobalEventListener(
-    'keyboardstatuschanged',
-    (status: unknown, keyboardHeight: unknown) => {
-      const parsedHeight = typeof keyboardHeight === 'number'
-        ? keyboardHeight
-        : Number(keyboardHeight ?? 0)
-      const nextHeight = status === 'on' && Number.isFinite(parsedHeight)
-        ? Math.max(0, parsedHeight)
-        : 0
-      setKeyboardInsetPx(nextHeight)
-    },
-  )
-
-  useEffect(() => {
-    'background only'
-    if (keyboardInsetPx <= 0 || !isAtBottomRef.current) return
-    scrollListToBottom(countVisibleMessageItems(messages, sending))
-  }, [keyboardInsetPx, messages, sending, scrollListToBottom])
+  // Keyboard avoidance is delegated to KeyboardAwareRoot/Responder/Trigger from
+  // @lynx-js/lynx-ui (wrapping the chat-body below). The Root listens for
+  // keyboardstatuschanged itself, queries the focused input's rect, and only
+  // shifts the responder when the input would otherwise be hidden — so a top-of-
+  // page input (e.g. NewSessionCard's directory field) stays in place.
 
   // Derive picker data + labels from current selection + catalogs.
   const currentModel = findBackendModel(providersCatalog, selection.providerID, selection.modelID)
@@ -769,6 +765,18 @@ export function App() {
     setPickerKind(null)
   }, [applySelection])
 
+  const handleDirectoryInput = useCallback((next: string) => {
+    'background only'
+    setPendingDirectory(next)
+  }, [])
+
+  const handlePickDirectory = useCallback((dir: string) => {
+    'background only'
+    setPendingDirectory(dir)
+  }, [])
+
+  const showNewSessionCard = isNewSession && !sessionId
+
   const chatInputSelection = {
     agentLabel,
     modelLabel,
@@ -790,7 +798,12 @@ export function App() {
         </view>
       </view>
 
-      <view className="chat-body" style={chatBodyStyle}>
+      <view className="chat-body">
+        <KeyboardAwareRoot androidStatusBarPlusBottomBarHeight={safeAreaInsets.bottom}>
+          <KeyboardAwareResponder
+            as="View"
+            className="chat-body__keyboard-responder"
+          >
         {fixtureMode
           ? (
             <view className="dev-banner">
@@ -816,6 +829,26 @@ export function App() {
                 <text className="chat-error-text">{error}</text>
               </view>
             </view>
+          ) : showNewSessionCard ? (
+            <scroll-view
+              className="chat-new-session-scroll"
+              scroll-orientation="vertical"
+              style={{ flex: 1 }}
+            >
+              <NewSessionCard
+                directory={pendingDirectory}
+                knownDirectories={knownDirectories}
+                agentLabel={agentLabel}
+                modelLabel={modelLabel}
+                effortLabel={effortLabel}
+                variantAvailable={variantAvailable}
+                onDirectoryInput={handleDirectoryInput}
+                onPickDirectory={handlePickDirectory}
+                onOpenAgent={handleOpenAgent}
+                onOpenModel={handleOpenModel}
+                onOpenEffort={handleOpenEffort}
+              />
+            </scroll-view>
           ) : messages.length === 0 ? (
             <view className="chat-state chat-state--center" style={{ flex: 1 }}>
               <view className="chat-state-card">
@@ -885,6 +918,8 @@ export function App() {
           onOpenEffortPicker={handleOpenEffort}
           areaStyle={chatInputAreaStyle}
         />
+          </KeyboardAwareResponder>
+        </KeyboardAwareRoot>
       </view>
 
       {pickerKind === 'agent' ? (

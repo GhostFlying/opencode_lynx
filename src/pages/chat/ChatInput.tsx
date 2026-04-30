@@ -1,4 +1,5 @@
 import { useCallback, useRef } from '@lynx-js/react'
+import { KeyboardAwareTrigger, TextArea } from '@lynx-js/lynx-ui'
 
 export interface ChatInputSelection {
   agentLabel: string
@@ -29,9 +30,9 @@ export function ChatInput({
 }: ChatInputProps) {
   const textRef = useRef('')
 
-  const handleInput = useCallback((e: { detail: { value: string } }) => {
+  const handleInput = useCallback((value: string) => {
     'background only'
-    textRef.current = e.detail.value
+    textRef.current = value
   }, [])
 
   const handleConfirm = useCallback(() => {
@@ -74,17 +75,19 @@ export function ChatInput({
     <view id="chat-input-area" className="chat-input-area" style={areaStyle}>
       <view className="chat-input-card">
         {/* Textarea */}
-        <textarea
-          id="chat-textarea"
-          className="chat-textarea"
-          style={{ color: '#0e191f' }}
-          placeholder="输入消息..."
-          maxlines={2}
-          maxlength={4096}
-          confirm-type="send"
-          bindinput={handleInput}
-          bindconfirm={handleConfirm}
-        />
+        <KeyboardAwareTrigger>
+          <TextArea
+            id="chat-textarea"
+            className="chat-textarea"
+            style={{ color: '#0e191f' }}
+            placeholder="输入消息..."
+            maxLines={2}
+            maxLength={4096}
+            confirmType="send"
+            onInput={handleInput}
+            onConfirm={handleConfirm}
+          />
+        </KeyboardAwareTrigger>
 
         {/* Toolbar inside card */}
         <view className="chat-input-toolbar">

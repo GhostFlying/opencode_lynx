@@ -10,7 +10,12 @@
 //
 // Responds to:
 //   GET /session                      → [{ id, title }]
+//   GET /experimental/session         → same shape (alternate path used by app)
 //   GET /session/:id/message          → one message with a text part (>= 12 chars)
+//   POST /session                     → newly-created session record (used by + button flow)
+//   POST /session/:id/message         → assistant ack (prompt accepted)
+//   GET /provider                     → catalog payload { all, default }
+//   GET /agent                        → list of agents
 //   GET /global/event                 → minimal OpenCode-shaped SSE stream
 //   anything else                     → 404
 //
@@ -27,6 +32,24 @@ const FIXTURE_MESSAGE_TEXT = 'Hello from CI fixture, this is a stable message li
 const NOW_MS = Date.now()
 const sseStreams = new Set()
 
+// Synthetic seed sessions across many distinct worktrees so the new-session
+// card can be exercised against a directory list that exceeds
+// KNOWN_DIRECTORY_LIMIT (8). The "primary" CI fixture stays at index 0 with
+// the freshest updatedAt so existing deeplink-smoke flows keep working.
+const EXTRA_FIXTURE_DIRECTORIES = [
+  '/Users/dev/projects/alpha',
+  '/Users/dev/projects/beta',
+  '/Users/dev/projects/gamma',
+  '/Users/dev/projects/delta',
+  '/Users/dev/projects/epsilon',
+  '/Users/dev/projects/zeta',
+  '/Users/dev/projects/eta',
+  '/Users/dev/projects/theta',
+  '/Users/dev/projects/iota',
+  '/Users/dev/projects/kappa',
+  '/Users/dev/projects/lambda',
+]
+
 const sessions = [
   {
     id: SESSION_ID,
@@ -40,6 +63,24 @@ const sessions = [
       updated: NOW_MS,
     },
   },
+  ...EXTRA_FIXTURE_DIRECTORIES.map((directory, idx) => ({
+    id: `ses_ci_seed_${idx}`,
+    slug: `ci-seed-${idx}`,
+    // All seed sessions share one project so the main session list stays
+    // compact (one extra Repository card with N worktrees) while still
+    // exposing N distinct directories to the new-session chip strip.
+    projectID: 'prj_ci_seed_shared',
+    directory,
+    title: `Seed session ${idx}`,
+    version: '0.0.0-ci-stub',
+    // Each seed session is one minute older than the previous; the primary
+    // ci-fixture session above is the freshest so it still appears at the
+    // top of the chip strip.
+    time: {
+      created: NOW_MS - (idx + 1) * 60_000,
+      updated: NOW_MS - (idx + 1) * 60_000,
+    },
+  })),
 ]
 
 const messagesBySession = {
@@ -135,16 +176,27 @@ function openGlobalEventStream(_req, res) {
   })
 }
 
-function routeRequest(req, res) {
-  if (req.method !== 'GET') {
-    writeJson(res, 405, { error: 'method_not_allowed' })
-    return
+async function readJsonBody(req) {
+  const chunks = []
+  for await (const chunk of req) {
+    chunks.push(chunk)
   }
+  if (chunks.length === 0) return {}
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  } catch {
+    return {}
+  }
+}
 
+let createdSessionCounter = 0
+
+async function routeRequest(req, res) {
   const url = new URL(req.url ?? '/', `http://${HOST}:${PORT}`)
   const path = url.pathname
+  const method = req.method ?? 'GET'
 
-  if (path === '/session' || path === '/experimental/session') {
+  if (method === 'GET' && (path === '/session' || path === '/experimental/session')) {
     // /session returns Session[]; /experimental/session returns GlobalSession[]
     // which the app normalizes via unwrapSessionEnvelope. Same minimal payload
     // is accepted by both shapes given the fields we're populating.
@@ -152,16 +204,94 @@ function routeRequest(req, res) {
     return
   }
 
-  if (path === '/global/event') {
+  if (method === 'GET' && path === '/global/event') {
     openGlobalEventStream(req, res)
     return
   }
 
   const messageMatch = path.match(/^\/session\/([^/]+)\/message$/)
-  if (messageMatch) {
+  if (method === 'GET' && messageMatch) {
     const id = messageMatch[1]
     const messages = messagesBySession[id] ?? []
     writeJson(res, 200, messages)
+    return
+  }
+
+  if (method === 'POST' && messageMatch) {
+    const id = messageMatch[1]
+    const now = Date.now()
+    writeJson(res, 200, {
+      info: {
+        id: `msg_assistant_${now}`,
+        sessionID: id,
+        role: 'assistant',
+        time: { created: now },
+      },
+    })
+    return
+  }
+
+  if (method === 'POST' && path === '/session') {
+    const body = await readJsonBody(req)
+    const directory =
+      typeof body.directory === 'string' && body.directory.length > 0
+        ? body.directory
+        : url.searchParams.get('directory') ?? '/tmp/ci-fixture-new'
+    createdSessionCounter += 1
+    const newId = `ses_ci_new_${createdSessionCounter}`
+    const now = Date.now()
+    sessions.unshift({
+      id: newId,
+      slug: `ci-fixture-new-${createdSessionCounter}`,
+      projectID: 'prj_ci',
+      directory,
+      title: typeof body.title === 'string' ? body.title : null,
+      version: '0.0.0-ci-stub',
+      time: { created: now, updated: now },
+    })
+    messagesBySession[newId] = []
+    writeJson(res, 200, {
+      id: newId,
+      directory,
+      title: typeof body.title === 'string' ? body.title : null,
+      version: '0.0.0-ci-stub',
+      time: { created: now, updated: now },
+    })
+    return
+  }
+
+  if (method === 'GET' && path === '/provider') {
+    writeJson(res, 200, {
+      all: [
+        {
+          id: 'anthropic',
+          name: 'Anthropic',
+          models: {
+            'claude-sonnet-4-20250514': {
+              id: 'claude-sonnet-4-20250514',
+              name: 'Claude Sonnet 4',
+              reasoning: true,
+              variants: { low: {}, medium: {}, high: {}, max: {} },
+            },
+          },
+        },
+      ],
+      default: { anthropic: 'claude-sonnet-4-20250514' },
+      connected: ['anthropic'],
+    })
+    return
+  }
+
+  if (method === 'GET' && path === '/agent') {
+    writeJson(res, 200, [
+      { name: 'build', description: 'Build things', mode: 'primary' },
+      { name: 'plan', description: 'Plan first', mode: 'primary' },
+    ])
+    return
+  }
+
+  if (method !== 'GET' && method !== 'POST') {
+    writeJson(res, 405, { error: 'method_not_allowed' })
     return
   }
 
@@ -170,14 +300,14 @@ function routeRequest(req, res) {
 
 const server = createServer((req, res) => {
   console.log(`[stub-opencode-server] ${req.method} ${req.url}`)
-  try {
-    routeRequest(req, res)
-  } catch (err) {
-    console.error('[stub-opencode-server] request error:', err)
-    if (!res.headersSent) {
-      writeJson(res, 500, { error: 'internal_error' })
-    }
-  }
+  Promise.resolve()
+    .then(() => routeRequest(req, res))
+    .catch((err) => {
+      console.error('[stub-opencode-server] request error:', err)
+      if (!res.headersSent) {
+        writeJson(res, 500, { error: 'internal_error' })
+      }
+    })
 })
 
 server.listen(PORT, HOST, () => {

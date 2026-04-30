@@ -1,10 +1,31 @@
 import '@testing-library/jest-dom'
-import { expect, test, vi } from 'vitest'
-import { render, getQueriesForElement } from '@lynx-js/react/testing-library'
+import { describe, expect, test, vi } from 'vitest'
+import { fireEvent, render, getQueriesForElement, waitFor } from '@lynx-js/react/testing-library'
 
-import { App, type ReadySignalPayload } from '../App.js'
+import type {
+  BackendClient,
+  BackendConnectionSnapshot,
+  BackendSubscribeOptions,
+  BackendSubscription,
+} from '../../../backends/index.js'
+import { open } from '../../../navigation.js'
+import { App, buildNewSessionScheme, type ReadySignalPayload } from '../App.js'
 
-vi.mock('../../navigation.js', () => ({ open: vi.fn() }))
+vi.mock('../../../navigation.js', () => ({ open: vi.fn() }))
+
+const { connectToBackendClientMock, readSavedConnectionWithRetryMock } = vi.hoisted(() => ({
+  connectToBackendClientMock: vi.fn(),
+  readSavedConnectionWithRetryMock: vi.fn(),
+}))
+
+vi.mock('../connection.js', async () => {
+  const actual = await vi.importActual<typeof import('../connection.js')>('../connection.js')
+  return {
+    ...actual,
+    connectToBackendClient: connectToBackendClientMock,
+    readSavedConnectionWithRetry: readSavedConnectionWithRetryMock,
+  }
+})
 vi.mock('@lynx-js/lynx-ui', async () => {
   const actual = await vi.importActual<typeof import('@lynx-js/lynx-ui')>('@lynx-js/lynx-ui')
 
@@ -171,6 +192,135 @@ test('retry contract uses bounded attempts up to 3 and preserves phase ordering'
   } finally {
     vi.useRealTimers()
   }
+})
+
+describe('buildNewSessionScheme', () => {
+  test('encodes connection, isNewSession flag, and known directories', () => {
+    const scheme = buildNewSessionScheme(
+      { ip: '10.0.0.1', port: '4567', password: 'pw' },
+      ['/repo/a', '/repo/b'],
+    )
+
+    expect(scheme.startsWith('hybrid://lynxview?bundle=.%2Fchat.lynx.bundle&hide_nav_bar=1&route_params=')).toBe(true)
+
+    const encoded = scheme.split('route_params=')[1]!
+    expect(JSON.parse(decodeURIComponent(encoded))).toEqual({
+      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+      isNewSession: true,
+      knownDirectories: ['/repo/a', '/repo/b'],
+    })
+  })
+})
+
+function createSubscription(): BackendSubscription {
+  return {
+    start: vi.fn(),
+    stop: vi.fn(),
+    reconnect: vi.fn(),
+    getState: vi.fn(
+      (): BackendConnectionSnapshot => ({
+        status: 'idle',
+        retryAttempt: 0,
+        nextRetryInMs: null,
+        reason: null,
+      }),
+    ),
+    attachAbortSignal: vi.fn(() => () => {}),
+  }
+}
+
+function createFakeBackendClient(): BackendClient {
+  const subscription = createSubscription()
+  return {
+    descriptor: { kind: 'opencode', label: 'OpenCode' },
+    capabilities: {
+      sessions: true,
+      streaming: true,
+      catalog: true,
+      approvals: false,
+      pty: false,
+      remoteDiscovery: false,
+      agentPicker: true,
+      modelPicker: true,
+    },
+    sessions: {
+      list: vi.fn(async () => [
+        {
+          backend: 'opencode' as const,
+          id: 'session-1',
+          title: 'Existing',
+          updatedAt: '2026-04-26T01:00:00.000Z',
+          directory: '/repo/known-one',
+          backendMeta: {},
+        },
+      ]),
+      create: vi.fn(),
+      get: vi.fn(),
+      messages: vi.fn(),
+      prompt: vi.fn(),
+    } as unknown as BackendClient['sessions'],
+    events: {
+      subscribe: vi.fn((options?: BackendSubscribeOptions) => {
+        options?.onConnectionStateChange?.({
+          status: 'open',
+          retryAttempt: 0,
+          nextRetryInMs: null,
+          reason: null,
+        })
+        return subscription
+      }),
+    },
+    catalog: {
+      providers: vi.fn(),
+      agents: vi.fn(),
+    } as unknown as NonNullable<BackendClient['catalog']>,
+  }
+}
+
+test('+ button on connected screen navigates to chat with new-session route params', async () => {
+  vi.mocked(open).mockClear()
+  readSavedConnectionWithRetryMock.mockResolvedValue({
+    ip: '10.0.0.1',
+    port: '4567',
+    password: 'pw',
+  })
+  const fakeClient = createFakeBackendClient()
+  connectToBackendClientMock.mockResolvedValue({
+    client: fakeClient,
+    connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    serverLabel: '10.0.0.1:4567',
+  })
+
+  const result = render(
+    <App
+      onMounted={vi.fn()}
+      readyRunId="run-plus-1"
+      readySignalSender={vi.fn()}
+      startupDataReady={true}
+      nowMs={() => 1000}
+    />,
+  )
+
+  await waitFor(() => {
+    expect(result.container.querySelector('.icon-button')).not.toBeNull()
+  })
+
+  await waitFor(() => {
+    expect(fakeClient.sessions.list).toHaveBeenCalled()
+  })
+
+  // Wait for known directories to propagate from SessionListView via callback.
+  const button = result.container.querySelector('.icon-button')!
+  fireEvent.tap(button)
+
+  expect(open).toHaveBeenCalledTimes(1)
+  const scheme = vi.mocked(open).mock.calls[0]![0].scheme
+  const encoded = scheme.split('route_params=')[1]!
+  expect(JSON.parse(decodeURIComponent(encoded))).toEqual({
+    connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    isNewSession: true,
+    knownDirectories: ['/repo/known-one'],
+  })
 })
 
 test('no-ready guard emits only react_ready when predicate stays false', async () => {

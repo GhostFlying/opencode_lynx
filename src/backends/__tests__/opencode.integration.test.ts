@@ -244,6 +244,27 @@ async function startMockOpencodeServer(): Promise<MockOpencodeServer> {
       return
     }
 
+    if (method === 'POST' && url.pathname === '/session') {
+      const body = (bodyJson ?? {}) as Record<string, unknown>
+      const directory =
+        typeof body.directory === 'string' && body.directory.length > 0
+          ? body.directory
+          : (typeof url.searchParams.get('directory') === 'string'
+              ? url.searchParams.get('directory')!
+              : '/repo/default')
+      writeJson(response, 200, {
+        id: 'session-new-1',
+        title: typeof body.title === 'string' ? body.title : null,
+        status: 'idle',
+        directory,
+        time: {
+          created: Date.parse('2026-01-01T00:00:00.500Z'),
+          updated: Date.parse('2026-01-01T00:00:00.500Z'),
+        },
+      })
+      return
+    }
+
     if (method === 'POST' && url.pathname === '/session/session-1/message') {
       writeJson(response, 200, {
         info: {
@@ -256,6 +277,24 @@ async function startMockOpencodeServer(): Promise<MockOpencodeServer> {
         },
       })
       return
+    }
+
+    {
+      const promptMatch = url.pathname.match(/^\/session\/([^/]+)\/message$/)
+      if (method === 'POST' && promptMatch) {
+        const sessionIDFromPath = promptMatch[1]
+        writeJson(response, 200, {
+          info: {
+            id: `assistant-${sessionIDFromPath}`,
+            sessionID: sessionIDFromPath,
+            role: 'assistant',
+            time: {
+              created: Date.parse('2026-01-01T00:00:03.000Z'),
+            },
+          },
+        })
+        return
+      }
     }
 
     if (method === 'GET' && url.pathname === '/provider') {
@@ -588,6 +627,74 @@ describe('opencode backend integration with mock server', () => {
       variant: 'high',
       parts: [{ type: 'text', text: 'hello over http' }],
     })
+  })
+
+  it('creates a new session then prompts it (new-session flow) over real HTTP', async () => {
+    const server = await startMockOpencodeServer()
+    activeServers.add(server)
+
+    const result = await connectOpencodeBackendClient(
+      {
+        ip: '127.0.0.1',
+        port: String(server.port),
+        password: '',
+      },
+      {
+        createClient(target) {
+          return createOpenCodeBackendAdapter(target.config, {
+            createGateway: createRealHttpGateway,
+          })
+        },
+      },
+    )
+
+    const created = await result.client.sessions.create({
+      directory: '/repo/new-session-target',
+    })
+    expect(created).toMatchObject({
+      backend: 'opencode',
+      id: 'session-new-1',
+      directory: '/repo/new-session-target',
+      createdAt: '2026-01-01T00:00:00.500Z',
+    })
+
+    const promptResult = await result.client.sessions.prompt(
+      created.id,
+      {
+        parts: [{ type: 'text', text: 'hello new world' }],
+        model: {
+          providerID: 'anthropic',
+          modelID: 'claude-sonnet-4',
+        },
+        agent: 'build',
+      },
+      { directory: '/repo/new-session-target' },
+    )
+    expect(promptResult).toMatchObject({
+      sessionID: 'session-new-1',
+      messageID: 'assistant-session-new-1',
+    })
+
+    const createRequest = server.requests.find(
+      request => request.method === 'POST' && request.path === '/session',
+    )
+    expect(createRequest).toBeDefined()
+    expect(createRequest?.query.directory).toBe('/repo/new-session-target')
+
+    const promptRequest = server.requests.find(
+      request =>
+        request.method === 'POST' && request.path === '/session/session-new-1/message',
+    )
+    expect(promptRequest).toBeDefined()
+    expect(promptRequest?.bodyJson).toMatchObject({
+      agent: 'build',
+      model: {
+        providerID: 'anthropic',
+        modelID: 'claude-sonnet-4',
+      },
+      parts: [{ type: 'text', text: 'hello new world' }],
+    })
+    expect(promptRequest?.query.directory).toBe('/repo/new-session-target')
   })
 
   it('subscribes to real SSE and maps streamed events through the adapter', async () => {

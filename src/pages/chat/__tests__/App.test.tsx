@@ -1,7 +1,14 @@
 import '@testing-library/jest-dom'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, waitFor } from '@lynx-js/react/testing-library'
 
-import type { BackendEvent } from '../../../backends/index.js'
+import type {
+  BackendClient,
+  BackendConnectionSnapshot,
+  BackendEvent,
+  BackendSubscribeOptions,
+  BackendSubscription,
+} from '../../../backends/index.js'
 import {
   errorMessageFromBackendEvent,
   shouldRefreshMessagesForBackendEvent,
@@ -13,6 +20,41 @@ import {
   FIXTURE_PROVIDERS,
   getFixtureMessages,
 } from '../fixtures.js'
+import {
+  parseChatRouteParams,
+  seedNewSessionDefaults,
+} from '../new-session-model.js'
+
+const { storageGetMock, storageSetMock, createBackendClientMock } = vi.hoisted(() => ({
+  storageGetMock: vi.fn(),
+  storageSetMock: vi.fn(),
+  createBackendClientMock: vi.fn(),
+}))
+
+vi.mock('../ChatInput.js', () => ({
+  ChatInput: ({ onSend, disabled }: { onSend: (text: string) => void; disabled?: boolean }) => (
+    <view
+      className="composer-stub"
+      data-disabled={disabled ? 'true' : 'false'}
+      bindtap={() => onSend('hello world')}
+    />
+  ),
+}))
+vi.mock('../../../navigation.js', () => ({ close: vi.fn() }))
+vi.mock('../../../storage.js', () => ({
+  storageGet: storageGetMock,
+  storageSet: storageSetMock,
+  storageRemove: vi.fn(),
+}))
+vi.mock('../../../backends/index.js', async () => {
+  const actual = await vi.importActual<typeof import('../../../backends/index.js')>(
+    '../../../backends/index.js',
+  )
+  return {
+    ...actual,
+    createOpencodeBackendClientFromConnection: createBackendClientMock,
+  }
+})
 
 describe('chat backend facade helpers', () => {
   it('uses backend-neutral fixture data for dev mode messages and catalogs', () => {
@@ -81,6 +123,86 @@ describe('chat backend facade helpers', () => {
     expect(shouldStopThinkingForBackendEvent(delta)).toBe(false)
   })
 
+  it('parses route params from globalProps.routeParams', () => {
+    expect(parseChatRouteParams({
+      routeParams: {
+        sessionId: 's1',
+        sessionTitle: 'Hello',
+        connection: { ip: '1.2.3.4', port: '4567', password: 'pw' },
+        isNewSession: false,
+        knownDirectories: ['/repo/a', 12, '/repo/b'],
+      },
+    })).toEqual({
+      sessionId: 's1',
+      sessionTitle: 'Hello',
+      connection: { ip: '1.2.3.4', port: '4567', password: 'pw' },
+      isNewSession: false,
+      knownDirectories: ['/repo/a', '/repo/b'],
+    })
+  })
+
+  it('parses route params from queryItems.route_params fallback', () => {
+    expect(parseChatRouteParams({
+      queryItems: {
+        route_params: JSON.stringify({
+          isNewSession: true,
+          connection: { ip: '10.0.0.1', port: '3000' },
+        }),
+      },
+    })).toEqual({
+      isNewSession: true,
+      connection: { ip: '10.0.0.1', port: '3000', password: undefined },
+    })
+  })
+
+  it('returns empty object on malformed route params', () => {
+    expect(parseChatRouteParams(null)).toEqual({})
+    expect(parseChatRouteParams({ queryItems: { route_params: '{not json' } })).toEqual({})
+    expect(parseChatRouteParams({})).toEqual({})
+  })
+
+  it('seeds new-session defaults from server catalogs', () => {
+    expect(seedNewSessionDefaults(
+      [
+        {
+          id: 'anthropic',
+          name: 'Anthropic',
+          models: [{ id: 'claude-sonnet-4', name: 'Sonnet', reasoning: false, reasoningEfforts: [] }],
+        },
+      ],
+      { anthropic: 'claude-sonnet-4' },
+      [{ id: 'build', name: 'build' }],
+    )).toEqual({
+      agent: 'build',
+      providerID: 'anthropic',
+      modelID: 'claude-sonnet-4',
+      variant: null,
+    })
+  })
+
+  it('seedNewSessionDefaults prefers the build agent over alphabetical first', () => {
+    expect(seedNewSessionDefaults(
+      [
+        {
+          id: 'p1',
+          name: 'P1',
+          models: [{ id: 'm1', name: 'M1', reasoning: false, reasoningEfforts: [] }],
+        },
+      ],
+      { p1: 'm1' },
+      [{ id: 'plan', name: 'plan' }, { id: 'build', name: 'build' }],
+    )?.agent).toBe('build')
+  })
+
+  it('seedNewSessionDefaults returns null when catalogs are empty', () => {
+    expect(seedNewSessionDefaults([], {}, [])).toBeNull()
+    expect(seedNewSessionDefaults(
+      [{ id: 'p1', name: 'P1', models: [] }],
+      {},
+      [{ id: 'a', name: 'a' }],
+    )).toBeNull()
+  })
+
   it('extracts session.error messages from raw backend payloads', () => {
     expect(errorMessageFromBackendEvent({
       backend: 'opencode',
@@ -105,5 +227,269 @@ describe('chat backend facade helpers', () => {
       payload: {},
       raw: {},
     })).toBe('Agent reported an error.')
+  })
+})
+
+interface ChatAppHarness {
+  client: BackendClient
+  subscription: BackendSubscription
+  getSubscribeOptionsList: () => BackendSubscribeOptions[]
+}
+
+function createSubscription(): BackendSubscription {
+  return {
+    start: vi.fn(),
+    stop: vi.fn(),
+    reconnect: vi.fn(),
+    getState: vi.fn(
+      (): BackendConnectionSnapshot => ({
+        status: 'idle',
+        retryAttempt: 0,
+        nextRetryInMs: null,
+        reason: null,
+      }),
+    ),
+    attachAbortSignal: vi.fn(() => () => {}),
+  }
+}
+
+function createFakeChatClient(overrides: Partial<{
+  create: ReturnType<typeof vi.fn>
+  prompt: ReturnType<typeof vi.fn>
+  messages: ReturnType<typeof vi.fn>
+}> = {}): ChatAppHarness {
+  const subscription = createSubscription()
+  const subscribeOptionsList: BackendSubscribeOptions[] = []
+
+  const client: BackendClient = {
+    descriptor: { kind: 'opencode', label: 'OpenCode' },
+    capabilities: {
+      sessions: true,
+      streaming: true,
+      catalog: true,
+      approvals: false,
+      pty: false,
+      remoteDiscovery: false,
+      agentPicker: true,
+      modelPicker: true,
+    },
+    sessions: {
+      list: vi.fn(),
+      create:
+        overrides.create
+          ?? vi.fn(async () => ({
+            backend: 'opencode' as const,
+            id: 'session-new',
+            backendMeta: {},
+          })),
+      get: vi.fn(),
+      messages: overrides.messages ?? vi.fn(async () => []),
+      prompt: overrides.prompt ?? vi.fn(async () => ({ status: 'sent' })),
+    } as unknown as BackendClient['sessions'],
+    events: {
+      subscribe: vi.fn((options?: BackendSubscribeOptions) => {
+        if (options) subscribeOptionsList.push(options)
+        options?.onConnectionStateChange?.({
+          status: 'open',
+          retryAttempt: 0,
+          nextRetryInMs: null,
+          reason: null,
+        })
+        return subscription
+      }),
+    },
+    catalog: {
+      providers: vi.fn(async () => ({
+        providers: [...FIXTURE_PROVIDERS],
+        defaults: { ...FIXTURE_PROVIDER_DEFAULTS },
+      })),
+      agents: vi.fn(async () => [...FIXTURE_AGENTS]),
+    } as unknown as NonNullable<BackendClient['catalog']>,
+  }
+
+  return {
+    client,
+    subscription,
+    getSubscribeOptionsList: () => subscribeOptionsList,
+  }
+}
+
+function setRouteParams(params: Record<string, unknown>): void {
+  const lynxGlobal = (globalThis as { lynx?: { __globalProps?: Record<string, unknown> } }).lynx
+  if (!lynxGlobal) {
+    throw new Error('lynx global is not initialized in this test environment')
+  }
+  lynxGlobal.__globalProps = { ...(lynxGlobal.__globalProps ?? {}), routeParams: params }
+}
+
+function clearRouteParams(): void {
+  const lynxGlobal = (globalThis as { lynx?: { __globalProps?: Record<string, unknown> } }).lynx
+  if (!lynxGlobal?.__globalProps) return
+  delete lynxGlobal.__globalProps.routeParams
+  delete lynxGlobal.__globalProps.queryItems
+}
+
+describe('Chat App new-session flow', () => {
+  beforeEach(() => {
+    storageGetMock.mockResolvedValue(null)
+    storageSetMock.mockReturnValue(undefined)
+    createBackendClientMock.mockReset()
+  })
+
+  afterEach(() => {
+    clearRouteParams()
+  })
+
+  it('renders the new-session card when sessionId is missing and connection is present', async () => {
+    setRouteParams({
+      isNewSession: true,
+      knownDirectories: ['/repo/known-one'],
+      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    })
+    const harness = createFakeChatClient()
+    createBackendClientMock.mockReturnValue(harness.client)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    expect(await result.findByText('New session')).toBeInTheDocument()
+    expect(await result.findByText('/repo/known-one')).toBeInTheDocument()
+    expect(result.queryByText('No session ID provided.')).toBeNull()
+    expect(result.queryByText('Loading messages...')).toBeNull()
+
+    result.unmount()
+  })
+
+  it('fills the directory input when a known-directory chip is tapped', async () => {
+    setRouteParams({
+      isNewSession: true,
+      knownDirectories: ['/repo/alpha', '/repo/beta'],
+      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    })
+    const harness = createFakeChatClient()
+    createBackendClientMock.mockReturnValue(harness.client)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    const chip = await result.findByText('/repo/alpha')
+    fireEvent.tap(chip.parentElement!)
+
+    await waitFor(() => {
+      const wrap = result.container.querySelector('.new-session-card__chip--active')
+      expect(wrap?.textContent).toContain('/repo/alpha')
+    })
+
+    result.unmount()
+  })
+
+  it('creates session and prompts on first send, then dismisses the card', async () => {
+    setRouteParams({
+      isNewSession: true,
+      knownDirectories: ['/repo/alpha'],
+      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    })
+    const createMock = vi.fn(async () => ({
+      backend: 'opencode' as const,
+      id: 'session-created-1',
+      backendMeta: {},
+    }))
+    const promptMock = vi.fn(async () => ({ status: 'sent' }))
+    const harness = createFakeChatClient({ create: createMock, prompt: promptMock })
+    createBackendClientMock.mockReturnValue(harness.client)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    const chip = await result.findByText('/repo/alpha')
+    fireEvent.tap(chip.parentElement!)
+
+    // Wait for catalog defaults to seed selection so the prompt payload
+    // contains a real model id.
+    await waitFor(() => {
+      expect(harness.client.catalog!.agents).toHaveBeenCalled()
+    })
+
+    const composer = result.container.querySelector('.composer-stub')
+    expect(composer).not.toBeNull()
+    fireEvent.tap(composer!)
+
+    await waitFor(() => {
+      expect(createMock).toHaveBeenCalledTimes(1)
+    })
+    expect(createMock).toHaveBeenCalledWith({ directory: '/repo/alpha' })
+
+    await waitFor(() => {
+      expect(promptMock).toHaveBeenCalledTimes(1)
+    })
+    expect(promptMock).toHaveBeenCalledWith(
+      'session-created-1',
+      expect.objectContaining({
+        agent: expect.any(String),
+        parts: [{ type: 'text', text: 'hello world' }],
+        model: expect.objectContaining({
+          providerID: expect.any(String),
+          modelID: expect.any(String),
+        }),
+      }),
+    )
+
+    await waitFor(() => {
+      expect(result.container.querySelector('.new-session-card')).toBeNull()
+    })
+
+    result.unmount()
+  })
+
+  it('keeps the card and surfaces the error when sessions.create rejects', async () => {
+    setRouteParams({
+      isNewSession: true,
+      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    })
+    const createMock = vi.fn(async () => {
+      throw new Error('Server out of capacity')
+    })
+    const promptMock = vi.fn(async () => ({ status: 'sent' }))
+    const harness = createFakeChatClient({ create: createMock, prompt: promptMock })
+    createBackendClientMock.mockReturnValue(harness.client)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    await waitFor(() => {
+      expect(harness.client.catalog!.agents).toHaveBeenCalled()
+    })
+
+    const composer = result.container.querySelector('.composer-stub')
+    expect(composer).not.toBeNull()
+    fireEvent.tap(composer!)
+
+    await waitFor(() => {
+      expect(result.queryByText('Server out of capacity')).not.toBeNull()
+    })
+    expect(promptMock).not.toHaveBeenCalled()
+
+    result.unmount()
+  })
+
+  it('renders the existing-session list path when sessionId is provided', async () => {
+    setRouteParams({
+      sessionId: 'session-existing-1',
+      sessionTitle: 'Existing chat',
+      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    })
+    const messagesMock = vi.fn(async () => [])
+    const harness = createFakeChatClient({ messages: messagesMock })
+    createBackendClientMock.mockReturnValue(harness.client)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    await waitFor(() => {
+      expect(messagesMock).toHaveBeenCalledWith('session-existing-1')
+    })
+    expect(result.container.querySelector('.new-session-card')).toBeNull()
+
+    result.unmount()
   })
 })
