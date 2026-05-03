@@ -311,6 +311,28 @@ When validating project changes:
 4. `pnpm build`
 5. if native behavior changed, run the relevant optional smoke commands
 
+## Mock WebSocket echo for `backend.channel.*`
+
+The `backend.channel.*` native bridge exposes a WebSocket to Lynx JS for the
+Codex backend. To smoke-test the bridge end-to-end against a real socket,
+boot the local echo server:
+
+```
+pnpm mock:ws-echo --port 7777
+```
+
+The server accepts every text frame and echoes it back. Reach it from each
+platform:
+
+- **iOS Simulator** — dial `ws://127.0.0.1:7777` directly (loopback works
+  out of the box).
+- **Android Emulator** — first run `adb reverse tcp:7777 tcp:7777`, then
+  dial `ws://127.0.0.1:7777`. (The reverse mapping forwards the
+  emulator's loopback to the host.)
+
+This is a **frame echo**, not a Codex protocol mock — Codex JSON-RPC
+fixtures arrive in Phase 2.
+
 ## Common mistakes to avoid
 
 - running project commands before `uv venv`

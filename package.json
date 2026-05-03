@@ -25,11 +25,13 @@
     "@lynx-js/types": "^3.7.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@types/react": "^18.3.20",
+    "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.0.18",
     "jsdom": "^28.0.0",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "ws": "^8.20.0"
   },
   "engines": {
     "node": "^22 || ^24"
@@ -46,6 +48,7 @@
     "gate:daily-full": "scripts/local-gate --mode full --platform both",
     "run:android": "rspeedy build && node scripts/copy-bundles.mjs && ./android/gradlew -p android :app:installDebug && adb shell am start -n com.opencode.lynx/.SplashActivity",
     "run:ios": "node scripts/run-ios-strict.mjs",
-    "codex:refresh-bindings": "codex app-server generate-ts --out scripts/codex-bindings/ts && codex app-server generate-json-schema --out scripts/codex-bindings/schema"
+    "codex:refresh-bindings": "codex app-server generate-ts --out scripts/codex-bindings/ts && codex app-server generate-json-schema --out scripts/codex-bindings/schema",
+    "mock:ws-echo": "node scripts/mock-ws-echo.mjs"
   }
 }
