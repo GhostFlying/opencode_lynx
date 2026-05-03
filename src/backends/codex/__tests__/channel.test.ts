@@ -244,6 +244,32 @@ describe('openBackendChannel', () => {
     expect(bridge.listeners.get('backend.channel.message.r1')?.size ?? 0).toBe(0)
   })
 
+  it('auto-unsubscribes bridge listeners when remote emits closed state', async () => {
+    const bridge = createBridgeFixture()
+    bridge.callAsync.mockResolvedValueOnce({ channel_id: 'channel-x' })
+
+    const channel = await openBackendChannel({
+      url: 'ws://example.com',
+      bridge: bridge.bridge,
+      randomId: () => 'r1',
+    })
+
+    // Sanity: both listeners are registered after open.
+    expect(bridge.listeners.get('backend.channel.message.r1')?.size).toBe(1)
+    expect(bridge.listeners.get('backend.channel.state.r1')?.size).toBe(1)
+
+    bridge.emit('backend.channel.state.r1', { state: 'closed', code: 1000 })
+
+    // Bridge listeners drop after the remote close — caller does not have to
+    // remember to call channel.close() manually.
+    expect(bridge.listeners.get('backend.channel.message.r1')?.size ?? 0).toBe(0)
+    expect(bridge.listeners.get('backend.channel.state.r1')?.size ?? 0).toBe(0)
+
+    // Subsequent send rejects without hitting the bridge.
+    await expect(channel.send({ x: 1 })).rejects.toThrow(/closed/)
+    expect(bridge.callAsync).toHaveBeenCalledTimes(1) // only the original open call
+  })
+
   it('rejects when native open omits a channel_id', async () => {
     const bridge = createBridgeFixture()
     bridge.callAsync.mockResolvedValueOnce({})
