@@ -6,6 +6,10 @@ import Lynx
 // can use it for event dispatch.
 extension LynxView: NativeNetworkSseEventDispatching {}
 
+// Same selector, separate protocol so the channel manager doesn't depend on
+// the SSE-flavored type name.
+extension LynxView: NativeBackendChannelEventDispatching {}
+
 /// Completion block for bridge method dispatch.
 /// - code: 1 = success, 0 = failure, -3 = invalid params
 /// - msg: optional error message
@@ -26,6 +30,7 @@ typealias BridgeCompletion = (_ code: Int, _ msg: String?, _ data: NSDictionary?
     // Services (constructed once, reused)
     private lazy var requestExecutor: NativeNetworkRequestExecuting = NativeURLSessionNetworkRequestExecutor()
     private lazy var sseManager = NativeURLSessionNetworkSseManager()
+    private lazy var channelManager: NativeBackendChannelManaging = NativeURLSessionBackendChannelManager()
 
     @objc init(lynxContext: LynxContext) {
         self.lynxContext = lynxContext
@@ -44,6 +49,12 @@ typealias BridgeCompletion = (_ code: Int, _ msg: String?, _ data: NSDictionary?
             handleSseOpen(params: params, completion: completion)
         case "network.sse.close":
             handleSseClose(params: params, completion: completion)
+        case "backend.channel.open":
+            handleBackendChannelOpen(params: params, completion: completion)
+        case "backend.channel.send":
+            handleBackendChannelSend(params: params, completion: completion)
+        case "backend.channel.close":
+            handleBackendChannelClose(params: params, completion: completion)
         case "storage.set":
             handleStorageSet(params: params, completion: completion)
         case "storage.get":
@@ -161,6 +172,96 @@ typealias BridgeCompletion = (_ code: Int, _ msg: String?, _ data: NSDictionary?
 
             let code = output.errorCode != nil ? Self.codeFailed : Self.codeSucceeded
             completion(code, output.errorMessage, result as NSDictionary)
+        }
+    }
+
+    // MARK: - Backend Channel (WebSocket)
+
+    private func handleBackendChannelOpen(params: NSDictionary, completion: @escaping BridgeCompletion) {
+        let urlString = (params["url"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let messageEventName = (params["message_event_name"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let stateEventName = (params["state_event_name"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !urlString.isEmpty,
+              let url = URL(string: urlString),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "ws" || scheme == "wss",
+              !messageEventName.isEmpty,
+              !stateEventName.isEmpty else {
+            completion(Self.codeInvalidParam, "Invalid backend.channel.open payload", ["error_code": "invalid_payload"])
+            return
+        }
+
+        guard let context = lynxContext,
+              let lynxView = context.getLynxView(),
+              let dispatching = lynxView as? NativeBackendChannelEventDispatching else {
+            completion(Self.codeFailed, "Lynx view unavailable for backend.channel.open", ["error_code": "bridge_unavailable"])
+            return
+        }
+
+        let dispatcher = NativeBackendChannelEventDispatcher(target: dispatching)
+        let headers = (params["headers"] as? [AnyHashable: Any] ?? [:]).reduce(into: [String: String]()) { acc, kv in
+            guard let key = kv.key as? String else { return }
+            let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            if let v = kv.value as? String {
+                acc[trimmed] = v
+            } else {
+                acc[trimmed] = String(describing: kv.value)
+            }
+        }
+        let pingIntervalMs = (params["ping_interval_ms"] as? NSNumber)?.intValue ?? 30_000
+
+        let input = NativeBackendChannelOpenInput(
+            url: url,
+            headers: headers,
+            messageEventName: messageEventName,
+            stateEventName: stateEventName,
+            pingIntervalMs: pingIntervalMs,
+            eventDispatcher: dispatcher
+        )
+
+        channelManager.open(input) { output in
+            var result: [String: Any] = [:]
+            if let id = output.channelID { result["channel_id"] = id }
+            if let errorCode = output.errorCode { result["error_code"] = errorCode; result["reason"] = errorCode }
+            if let errorMessage = output.errorMessage { result["error_message"] = errorMessage }
+            let code = output.errorCode != nil ? Self.codeFailed : Self.codeSucceeded
+            completion(code, output.errorMessage, result as NSDictionary)
+        }
+    }
+
+    private func handleBackendChannelSend(params: NSDictionary, completion: @escaping BridgeCompletion) {
+        let channelID = (params["channel_id"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !channelID.isEmpty, let payload = params["payload"] else {
+            completion(Self.codeInvalidParam, "Invalid backend.channel.send payload", ["error_code": "invalid_payload"])
+            return
+        }
+
+        channelManager.send(channelID: channelID, payload: payload) { output in
+            var result: [String: Any] = ["sent": output.sent]
+            if let errorCode = output.errorCode { result["error_code"] = errorCode; result["reason"] = errorCode }
+            if let errorMessage = output.errorMessage { result["error_message"] = errorMessage }
+            let code = output.errorCode != nil ? Self.codeFailed : Self.codeSucceeded
+            completion(code, output.errorMessage, result as NSDictionary)
+        }
+    }
+
+    private func handleBackendChannelClose(params: NSDictionary, completion: @escaping BridgeCompletion) {
+        let channelID = (params["channel_id"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !channelID.isEmpty else {
+            completion(Self.codeInvalidParam, "Invalid backend.channel.close payload", ["error_code": "invalid_payload"])
+            return
+        }
+        let code = (params["code"] as? NSNumber)?.intValue
+        let reason = params["reason"] as? String
+
+        channelManager.close(channelID: channelID, code: code, reason: reason) { output in
+            var result: [String: Any] = ["closed": output.closed]
+            if let errorCode = output.errorCode { result["error_code"] = errorCode; result["reason"] = errorCode }
+            if let errorMessage = output.errorMessage { result["error_message"] = errorMessage }
+            let respCode = output.errorCode != nil ? Self.codeFailed : Self.codeSucceeded
+            completion(respCode, output.errorMessage, result as NSDictionary)
         }
     }
 
