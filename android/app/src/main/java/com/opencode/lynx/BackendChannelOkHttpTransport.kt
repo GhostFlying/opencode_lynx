@@ -141,9 +141,12 @@ class BackendChannelOkHttpTransport(
             }
         }
 
+        // Register before kicking off the socket so a fast `onFailure` /
+        // `onClosed` cannot run `sessions.remove(...)` against an empty map
+        // and leave a terminated session re-inserted afterwards.
+        sessions[channelId] = session
         val ws = client.newWebSocket(requestBuilder.build(), listener)
         session.webSocket = ws
-        sessions[channelId] = session
 
         return BackendChannelOpenResult(
             status = BackendChannelStatus.SUCCESS,
@@ -193,10 +196,34 @@ class BackendChannelOkHttpTransport(
         val session = sessions.remove(payload.channelId)
             ?: return BackendChannelCloseResult(BackendChannelStatus.SUCCESS, false, null, null)
 
+        // Mark terminal before draining the socket so any racing
+        // WebSocketListener callback that arrives after this point becomes a
+        // no-op and cannot deliver further frames or state events to the
+        // application.
+        if (!session.terminated.compareAndSet(false, true)) {
+            return BackendChannelCloseResult(BackendChannelStatus.SUCCESS, true, null, null)
+        }
+
         val code = payload.code ?: 1000
+
+        // Emit the terminal state event ourselves rather than relying on
+        // OkHttp's `onClosed` callback — that callback short-circuits because
+        // we already flipped `terminated`. Mirrors iOS, which also emits the
+        // closed state from inside `cancel()`.
+        val state = mutableMapOf<String, Any>("state" to "closed", "code" to code)
+        payload.reason?.let { state["reason"] = it }
+        try { session.onState?.invoke(state) } catch (_: Exception) {}
+
+        val ws = session.webSocket
+        var graceful = false
         try {
-            session.webSocket?.close(code, payload.reason)
-        } catch (_: Exception) {}
+            graceful = ws?.close(code, payload.reason) ?: false
+        } catch (_: Exception) {
+            // Fall through to cancel.
+        }
+        if (!graceful) {
+            try { ws?.cancel() } catch (_: Exception) {}
+        }
         return BackendChannelCloseResult(BackendChannelStatus.SUCCESS, true, null, null)
     }
 

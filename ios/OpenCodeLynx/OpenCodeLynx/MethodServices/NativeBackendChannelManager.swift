@@ -120,32 +120,28 @@ final class NativeURLSessionBackendChannelManager: NativeBackendChannelManaging 
             channels[channelID] = channel
         }
 
-        let completionLock = NSLock()
-        var openCompleted = false
-        let invokeCompletion: (NativeBackendChannelOpenOutput) -> Void = { output in
-            completionLock.lock()
-            if openCompleted {
-                completionLock.unlock()
-                return
-            }
-            openCompleted = true
-            completionLock.unlock()
-            completion(output)
-        }
-
+        // Bridge contract (matches Android): `backend.channel.open` returns the
+        // channelID synchronously. The actual handshake outcome — success or
+        // failure — is delivered asynchronously through the state event. The
+        // JS layer always has a channelID it can use to call
+        // `backend.channel.close`, even if the socket never opens. This avoids
+        // the orphan-channel scenario where a slow handshake outlives the JS
+        // bridge timeout.
         transport.start(
             url: input.url,
             headers: input.headers,
             pingIntervalMs: input.pingIntervalMs,
             onOpen: {
                 dispatcher.emit(eventName: stateEventName, payload: ["state": "open"])
-                invokeCompletion(NativeBackendChannelOpenOutput(channelID: channelID, errorCode: nil, errorMessage: nil))
             },
             onText: { text in
                 if let data = text.data(using: .utf8),
                    let frame = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                     dispatcher.emit(eventName: messageEventName, payload: ["frame": frame])
                 } else {
+                    // Non-JSON text frames are surfaced as a non-terminal error
+                    // state. The channel stays open; the application decides
+                    // whether to close it.
                     dispatcher.emit(eventName: stateEventName, payload: ["state": "error", "error": "non_json_frame"])
                 }
             },
@@ -157,25 +153,17 @@ final class NativeURLSessionBackendChannelManager: NativeBackendChannelManaging 
                     if let reason { payload["reason"] = reason }
                     dispatcher.emit(eventName: stateEventName, payload: payload)
                     self?.removeChannel(channelID)
-                    invokeCompletion(NativeBackendChannelOpenOutput(
-                        channelID: nil,
-                        errorCode: NativeBackendChannelErrorClosed,
-                        errorMessage: reason ?? "channel closed before open"
-                    ))
                 case .failed(let error, let code, let reason):
                     var payload: [String: Any] = ["state": "error", "error": error]
                     if let code { payload["code"] = code }
                     if let reason { payload["reason"] = reason }
                     dispatcher.emit(eventName: stateEventName, payload: payload)
                     self?.removeChannel(channelID)
-                    invokeCompletion(NativeBackendChannelOpenOutput(
-                        channelID: nil,
-                        errorCode: NativeBackendChannelErrorTransport,
-                        errorMessage: error
-                    ))
                 }
             }
         )
+
+        completion(NativeBackendChannelOpenOutput(channelID: channelID, errorCode: nil, errorMessage: nil))
     }
 
     func send(channelID: String, payload: Any, completion: @escaping (NativeBackendChannelSendOutput) -> Void) {
@@ -367,14 +355,24 @@ private final class URLSessionBackendChannelTransport: NSObject, NativeBackendCh
         }
         terminated = true
         dispatch = onState
+        let task = self.task
+        let session2 = self.session
         let timer = pingTimer
+        self.task = nil
+        self.session = nil
         self.pingTimer = nil
         self.onState = nil
         self.onText = nil
         self.onOpen = nil
         lock.unlock()
 
+        // URLSession holds a strong reference to its delegate (this transport)
+        // until invalidation. Without this call, every closed channel keeps
+        // the transport, session, and the receive-loop closure alive.
         timer?.cancel()
+        task?.cancel(with: closeCode, reason: nil)
+        session2?.invalidateAndCancel()
+
         let reasonString = reason.flatMap { String(data: $0, encoding: .utf8) }
         dispatch?(.closed(code: closeCode.rawValue, reason: reasonString))
     }
@@ -392,12 +390,13 @@ private final class URLSessionBackendChannelTransport: NSObject, NativeBackendCh
             switch result {
             case .success(let message):
                 let onText = self.lock.withLock { self.onText }
-                let onState = self.lock.withLock { self.onState }
                 switch message {
                 case .string(let s):
                     onText?(s)
                 case .data:
-                    onState?(.failed(error: "non_json_frame", code: nil, reason: nil))
+                    // Codex protocol is text-only; silently drop binary frames
+                    // rather than treating them as terminal failures.
+                    break
                 @unknown default:
                     break
                 }

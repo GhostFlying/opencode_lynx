@@ -100,7 +100,7 @@ private func waitForEvents(_ target: CapturingDispatcherTarget, atLeast count: I
 }
 
 struct NativeBackendChannelManagerTests {
-    @Test func openSuccessEmitsOpenStateAndChannelID() async throws {
+    @Test func openReturnsChannelIDSynchronouslyAndOpenStateArrivesAsync() async throws {
         let fake = FakeBackendChannelTransport()
         let target = CapturingDispatcherTarget()
         let manager = NativeURLSessionBackendChannelManager(
@@ -121,14 +121,17 @@ struct NativeBackendChannelManagerTests {
             completion: { output = $0 }
         )
 
-        // Driver: native socket completes its handshake.
-        fake.triggerOpen()
-        waitForEvents(target, atLeast: 1)
-
+        // Completion fires synchronously with a channelID — no need to wait
+        // for the socket handshake.
         #expect(output?.channelID == "channel-fixed")
         #expect(output?.errorCode == nil)
         #expect(fake.startedHeaders["Authorization"] == "Bearer xyz")
         #expect(fake.startedURL?.absoluteString == "ws://example.com/socket")
+        #expect(target.snapshot().isEmpty) // no state events yet
+
+        // The handshake outcome is delivered later, asynchronously.
+        fake.triggerOpen()
+        waitForEvents(target, atLeast: 1)
 
         let calls = target.snapshot()
         #expect(calls.count == 1)
@@ -276,7 +279,7 @@ struct NativeBackendChannelManagerTests {
         #expect(sendOutput?.errorCode == "channel_closed")
     }
 
-    @Test func transportFailureEmitsErrorState() async throws {
+    @Test func transportFailureEmitsErrorStateAfterSyncOpen() async throws {
         let fake = FakeBackendChannelTransport()
         let target = CapturingDispatcherTarget()
         let manager = NativeURLSessionBackendChannelManager(
@@ -296,14 +299,24 @@ struct NativeBackendChannelManagerTests {
             ),
             completion: { output = $0 }
         )
+
+        // Completion already returned the channelID; the failure is surfaced
+        // through the state event channel, not through the open completion.
+        #expect(output?.channelID == "channel-1")
+        #expect(output?.errorCode == nil)
+
         fake.triggerState(.failed(error: "tcp reset", code: 54, reason: "ECONNRESET"))
         waitForEvents(target, atLeast: 1)
 
-        #expect(output?.errorCode == "transport_error")
-        #expect(output?.errorMessage == "tcp reset")
         let errorCall = target.snapshot().first { $0.eventName == "state-evt" }
         #expect(errorCall?.payload["state"] as? String == "error")
         #expect(errorCall?.payload["error"] as? String == "tcp reset")
+
+        // After the failure the channel is dropped from the registry, so a
+        // subsequent send returns channel_closed.
+        var sendOutput: NativeBackendChannelSendOutput?
+        manager.send(channelID: "channel-1", payload: ["x": 1]) { sendOutput = $0 }
+        #expect(sendOutput?.errorCode == "channel_closed")
     }
 
     @Test func concurrentChannelsAreIsolated() async throws {

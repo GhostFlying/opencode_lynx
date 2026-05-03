@@ -59,6 +59,11 @@ export async function openBackendChannel(opts: OpenBackendChannelOptions): Promi
     }
   }
 
+  const cleanupBridgeListeners = (): void => {
+    bridge.off(messageEventName, messageListener)
+    bridge.off(stateEventName, stateListener)
+  }
+
   const stateListener = (event: unknown): void => {
     if (!isRecord(event)) return
     const mapped = mapStateEvent(event)
@@ -69,6 +74,16 @@ export async function openBackendChannel(opts: OpenBackendChannelOptions): Promi
         subscriber(mapped)
       } catch (error) {
         console.warn('[backend.channel] onState handler threw', error)
+      }
+    }
+    // Remote-driven termination: native has emitted a final state, so the
+    // channel cannot deliver more frames. Mark closed and release bridge
+    // listeners so callers don't have to remember to call close() after a
+    // remote close. Subsequent send() rejects; close() is a no-op.
+    if (mapped.state === 'closed') {
+      if (!closed) {
+        closed = true
+        cleanupBridgeListeners()
       }
     }
   }
@@ -90,8 +105,7 @@ export async function openBackendChannel(opts: OpenBackendChannelOptions): Promi
     }
     channelId = result.channel_id
   } catch (error) {
-    bridge.off(messageEventName, messageListener)
-    bridge.off(stateEventName, stateListener)
+    cleanupBridgeListeners()
     throw error
   }
 
@@ -138,8 +152,7 @@ export async function openBackendChannel(opts: OpenBackendChannelOptions): Promi
           reason,
         })
       } finally {
-        bridge.off(messageEventName, messageListener)
-        bridge.off(stateEventName, stateListener)
+        cleanupBridgeListeners()
       }
     },
   }
