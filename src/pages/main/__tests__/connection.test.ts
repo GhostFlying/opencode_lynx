@@ -22,6 +22,7 @@ import type { BackendClient } from '../../../backends/index.js'
 import {
   cloneConnection,
   connectToBackendClient,
+  createBackendClientFromConnection,
   defaultConnection,
   defaultConnectionForKind,
   formatEndpoint,
@@ -531,5 +532,73 @@ describe('connectToBackendClient', () => {
       STORAGE_KEY,
       JSON.stringify(out.connection),
     )
+  })
+})
+
+describe('createBackendClientFromConnection', () => {
+  test('opencode dispatches through createOpencode option', () => {
+    const fake = fakeClient()
+    const createOpencode = vi.fn(() => fake)
+    const createCodex = vi.fn()
+
+    const result = createBackendClientFromConnection(
+      {
+        kind: 'opencode',
+        ip: '127.0.0.1',
+        port: '3000',
+        password: 'pw',
+      },
+      { createOpencode, createCodex },
+    )
+
+    expect(createOpencode).toHaveBeenCalledTimes(1)
+    expect(createOpencode).toHaveBeenCalledWith({
+      ip: '127.0.0.1',
+      port: '3000',
+      password: 'pw',
+    })
+    expect(createCodex).not.toHaveBeenCalled()
+    expect(result).toBe(fake)
+  })
+
+  test('codex dispatches through createCodex option', () => {
+    const fake = fakeClient()
+    const createOpencode = vi.fn()
+    const createCodex = vi.fn(() => fake)
+
+    const result = createBackendClientFromConnection(
+      {
+        kind: 'codex',
+        host: 'example.com',
+        port: '7777',
+        token: 'tok',
+        secure: true,
+      },
+      { createOpencode, createCodex },
+    )
+
+    expect(createCodex).toHaveBeenCalledTimes(1)
+    expect(createCodex).toHaveBeenCalledWith({
+      host: 'example.com',
+      port: '7777',
+      token: 'tok',
+      secure: true,
+    })
+    expect(createOpencode).not.toHaveBeenCalled()
+    expect(result).toBe(fake)
+  })
+
+  test('does not save connection on dispatch (sync factory only)', () => {
+    const fake = fakeClient()
+    createBackendClientFromConnection(
+      {
+        kind: 'opencode',
+        ip: '127.0.0.1',
+        port: '3000',
+        password: '',
+      },
+      { createOpencode: () => fake, createCodex: vi.fn() },
+    )
+    expect(storageSetMock).not.toHaveBeenCalled()
   })
 })

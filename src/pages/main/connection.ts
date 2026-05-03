@@ -1,6 +1,8 @@
 import {
   connectCodexBackendClient,
   connectOpencodeBackendClient,
+  createCodexBackendClientFromConnection,
+  createOpencodeBackendClientFromConnection,
 } from '../../backends/index.js';
 import type { BackendClient, BackendConnectionState } from '../../backends/index.js';
 import { storageGet, storageRemove, storageSet } from '../../storage.js';
@@ -41,6 +43,11 @@ export interface ConnectionAttemptResult {
 export interface ConnectToBackendOptions {
   connectOpencode?: typeof connectOpencodeBackendClient;
   connectCodex?: typeof connectCodexBackendClient;
+}
+
+export interface CreateBackendClientFromConnectionOptions {
+  createOpencode?: typeof createOpencodeBackendClientFromConnection;
+  createCodex?: typeof createCodexBackendClientFromConnection;
 }
 
 export function isOpencodeConnection(
@@ -392,4 +399,32 @@ export async function connectToBackendClient(
     connection: normalized,
     serverLabel: result.serverLabel,
   };
+}
+
+/**
+ * Synchronous backend-client factory used by pages that already have a saved
+ * `ConnectionContext` (e.g. the chat page) and just need a fresh client. Unlike
+ * `connectToBackendClient`, this performs no network probe and does not save —
+ * it dispatches by `connection.kind` to the matching backend factory.
+ */
+export function createBackendClientFromConnection(
+  connection: ConnectionContext,
+  options: CreateBackendClientFromConnectionOptions = {}
+): BackendClient {
+  if (isOpencodeConnection(connection)) {
+    const create = options.createOpencode ?? createOpencodeBackendClientFromConnection;
+    return create({
+      ip: connection.ip,
+      port: connection.port,
+      password: connection.password,
+    });
+  }
+
+  const create = options.createCodex ?? createCodexBackendClientFromConnection;
+  return create({
+    host: connection.host,
+    port: connection.port,
+    token: connection.token,
+    secure: connection.secure,
+  });
 }
