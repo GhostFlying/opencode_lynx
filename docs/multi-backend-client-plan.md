@@ -13,10 +13,13 @@ It does **not** mean those backends are already implemented in this repository.
 Today, the repository ships:
 
 - a Lynx mobile client wrapper centered on OpenCode transport and session flows
-- native bridge networking for REST and SSE
-- a `src/backends/` layer with shared types, registry, facade, and the OpenCode adapter
-- production `main` and `chat` pages using the backend facade for OpenCode
-- no Codex or Claude adapter implementation yet
+- native bridge networking for REST and SSE plus `backend.channel.*` for
+  bidirectional WebSocket channels (used by Codex)
+- a `src/backends/` layer with shared types, registry, facade, OpenCode
+  adapter, and Codex adapter (v1)
+- production `main` and `chat` pages using the backend facade for both
+  OpenCode and Codex, with kind selection in the connection form
+- no Claude adapter implementation yet
 
 ## Problem Statement
 
@@ -431,16 +434,20 @@ Suggested initial capability matrix:
 
 | Capability | OpenCode | Codex | Claude Code |
 |---|---|---|---|
-| list sessions | yes | yes | yes |
-| create session | yes | yes | yes |
-| resume session | yes | yes | yes |
-| stream events | yes | yes | yes |
-| approvals | yes | yes | yes |
-| tool calls | yes | yes | yes |
-| PTY | yes | yes | no initial target |
-| remote discovery | no initial target | yes | no initial target |
-| model picker | yes | yes | yes |
-| agent picker | yes | limited | yes |
+| sessions | yes | yes | yes (planned) |
+| streaming | yes | yes | yes (planned) |
+| catalog | yes | yes | yes (planned) |
+| approvals | yes | yes | yes (planned) |
+| PTY | yes | no | no initial target |
+| remote discovery | no initial target | no | no initial target |
+| agent picker | yes | no (v1) | yes (planned) |
+| model picker | yes | yes | yes (planned) |
+
+The Codex column reflects the actual `CODEX_CAPABILITIES` block in
+`src/backends/codex/adapter.ts`. v1 ships with `agentPicker: false`, so the
+chat page's agent surface stays gated off for Codex even though Codex itself
+has an agent concept (`agentNickname`, `agentRole`, `collabAgentToolCall`
+per the local protocol bindings) — we just are not surfacing it in v1.
 
 The UI should branch based on these capability flags instead of checking provider names directly.
 
@@ -461,13 +468,19 @@ The UI should branch based on these capability flags instead of checking provide
 
 ### Phase 3: Introduce backend channel bridge
 
-Status: deferred.
+Status: complete.
 
-- define native `backend.channel.*` bridge contract
-- implement a no-op or stubbed host-backed channel
-- keep only OpenCode registered in production at first
+- native `backend.channel.{open,send,close}` contract is documented in
+  `docs/network-bridge-api-spec.md`
+- iOS and Android implementations are wired through `OpenCodeBridgeModule`
+- OpenCode and Codex are both registered in the backend registry; backend
+  selection lands in connection form (M3.2)
 
 ### Phase 4: Add Codex
+
+Status: in progress / v1 complete; Codex adapter, JSON-RPC bridge, and
+connection form selector are merged. Real-codex Gate B validation pending
+(see M3.5).
 
 - implement `CodexAdapter`
 - support direct app-server connection first
@@ -490,8 +503,18 @@ Status: partially complete for OpenCode page migration.
 - unify reconnect/resync UI
 - migrate pages to the backend facade once OpenCode parity is verified
   - complete for the OpenCode production path on `main` and `chat`
-  - Codex, Claude, backend channel bridge, and backend selection UI remain
-    deferred
+  - Codex production path (v1) and backend channel bridge are merged;
+    backend selection lives in the connection form (M3.2)
+  - Claude adapter and Codex agent picker surface remain deferred
+
+## Storage migration
+
+The persisted connection record was renamed from `opencode_connection` to
+`backend_connection` in M3.1. Existing records are migrated forward at read
+time by injecting `kind: 'opencode'` so legacy installs keep working without
+prompting the user to reconfigure. New records are written under the new key
+with the user-selected backend kind (`opencode` or `codex`). The legacy
+`opencode_connection` key is no longer written.
 
 ## Risks
 

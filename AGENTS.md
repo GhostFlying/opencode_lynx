@@ -154,6 +154,8 @@ Host containers on both iOS and Android inject `safeAreaInsets` through `lynx.__
 
 Do not default to browser routing, `localStorage`, or browser media assumptions.
 
+Bridge methods now include `backend.channel.{open,send,close}` for long-lived bidirectional WebSocket channels (used by the Codex adapter). Server→client frames flow through pre-allocated event names dispatched via `LynxContext.sendGlobalEvent`. Reconnect ownership lives in JS (`src/backends/codex/protocol.ts`), not native — native is transport-only. See `docs/network-bridge-api-spec.md` for the wire contract. Codex is now a selectable backend kind alongside OpenCode (`BackendKind = 'opencode' | 'codex'` in production; `claude` remains declared but unimplemented).
+
 ## Current Top-level Structure
 
 The repository follows a standard rspeedy layout at the repo root.
@@ -223,3 +225,5 @@ Good output in this repository should:
 - Official Lynx agent guidance: <https://lynxjs.org/next/ai/agentsmd.html>
 - Local guide: `./docs/lynx-vs-web.md`
 - OpenCode mobile reference: `./docs/opencode-mobile-client-reference.md`
+- Multi-backend client plan: `./docs/multi-backend-client-plan.md` — selectable backend kinds: `opencode`, `codex` (Claude planned)
+- Backend channel bridge contract: `./docs/network-bridge-api-spec.md`

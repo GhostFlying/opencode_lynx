@@ -4,15 +4,18 @@ This document describes the JS-side network API surface exposed through the nati
 
 ## Bridge Methods
 
-Three bridge methods are registered via the `nativeBridge` LynxModule:
+The following bridge methods are registered via the `nativeBridge` LynxModule:
 
 | Method | Direction | Purpose |
 |--------|-----------|---------|
 | `network.request` | JS → Native → JS | Execute an HTTP request |
 | `network.sse.open` | JS → Native → JS + events | Open an SSE stream |
 | `network.sse.close` | JS → Native → JS | Close an SSE stream |
+| `backend.channel.open` | JS → Native → JS + events | Open a long-lived WebSocket channel (used by Codex) |
+| `backend.channel.send` | JS → Native → JS | Send a JSON frame on an open channel |
+| `backend.channel.close` | JS → Native → JS | Close a channel |
 
-SSE events flow from native to JS via `sendGlobalEvent` on a per-stream event channel (`network.sse.event.<streamId>`).
+SSE events flow from native to JS via `sendGlobalEvent` on a per-stream event channel (`network.sse.event.<streamId>`). Backend-channel frames and state transitions flow on per-channel event names supplied by JS at open time.
 
 ---
 
@@ -168,6 +171,101 @@ await gateway.opencode.network.sse.close(handle)
 
 ---
 
+## Backend Channel: Open / Send / Close
+
+These three methods provide a long-lived bidirectional WebSocket channel.
+JS allocates two event names up front (one for inbound frames, one for
+state transitions); native dispatches both via
+`LynxContext.sendGlobalEvent`. Reconnect ownership lives in JS, not
+native — native is transport-only.
+
+### Open
+
+`backend.channel.open` request body (snake_case keys, exactly as accepted
+by the iOS/Android handlers):
+
+```typescript
+interface BackendChannelOpenRequest {
+  url: string                          // ws:// or wss://; other schemes rejected
+  headers?: Record<string, string>     // string-valued; non-string values are coerced to string on iOS, dropped on Android
+  message_event_name: string           // global event name native uses for inbound frames
+  state_event_name: string             // global event name native uses for state transitions
+  ping_interval_ms?: number            // default 30_000
+}
+```
+
+Response (success):
+
+```typescript
+{ channel_id: string }
+```
+
+Response (failure): `error_code: 'invalid_payload' | 'bridge_unavailable' | ...`,
+`error_message: string`. Native may also surface the failure asynchronously
+via `state_event_name` after returning a `channel_id`; JS treats that as
+authoritative.
+
+### Send
+
+`backend.channel.send` request body:
+
+```typescript
+interface BackendChannelSendRequest {
+  channel_id: string
+  payload: Record<string, unknown>     // serialized to JSON text on the wire
+}
+```
+
+Response (success): `{ sent: true }`. Failure: `sent: false`, `error_code`,
+`error_message`.
+
+### Close
+
+`backend.channel.close` request body:
+
+```typescript
+interface BackendChannelCloseRequest {
+  channel_id: string
+  code?: number                        // WebSocket close code
+  reason?: string
+}
+```
+
+Response (success): `{ closed: true }`. Failure: `closed: false`,
+`error_code`, `error_message`. `close()` is idempotent on the JS side; a
+second call after a remote-driven close is a no-op.
+
+### Inbound message event payload
+
+Dispatched on `message_event_name` for every inbound text frame that
+parses as a JSON object:
+
+```typescript
+{ frame: Record<string, unknown> }
+```
+
+Non-JSON text frames are surfaced as a non-terminal `state` event with
+`error: 'non_json_frame'` instead of a `frame` event; the channel stays
+open.
+
+### State event payload
+
+Dispatched on `state_event_name`:
+
+```typescript
+{ state: 'open' }
+{ state: 'error', error: string, code?: number, reason?: string }   // non-terminal
+{ state: 'closed', code?: number, reason?: string }                 // terminal
+```
+
+`closing` is reserved on the JS-side `ChannelState` union but is not
+emitted by the current native implementations. After a `closed` state,
+native has released its end of the channel; JS marks the channel closed
+and unsubscribes from both event names automatically. Subsequent
+`send()` calls reject; `close()` is a no-op.
+
+---
+
 ## Error Handling
 
 All bridge errors are normalized to `OpencodeNetworkBridgeError`:
@@ -269,6 +367,9 @@ This wraps `network.sse.open` / `network.sse.close` with:
 | SSE reconnect max delay | 30,000 ms |
 | SSE reconnect max retries | 5 |
 | SSE event name prefix | `network.sse.event.` |
+| Backend channel ping interval | 30,000 ms |
+| Backend channel message event name prefix | `backend.channel.message.` |
+| Backend channel state event name prefix | `backend.channel.state.` |
 
 ---
 
@@ -284,3 +385,6 @@ This wraps `network.sse.open` / `network.sse.close` with:
 | `src/opencode/errors.ts` | Error types and classification |
 | `src/opencode/types.ts` | Public type definitions |
 | `src/opencode/index.ts` | Public exports |
+| `src/backends/codex/channel.ts` | JS-side `backend.channel.*` client, message/state subscription |
+| `src/backends/codex/protocol.ts` | JSON-RPC 2.0 client over the channel; owns reconnect |
+| `src/backends/codex/adapter.ts` | BackendClient implementation for Codex |
