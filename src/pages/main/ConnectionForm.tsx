@@ -1,8 +1,16 @@
 import { useCallback } from '@lynx-js/react'
-import { Button, Input, KeyboardAwareTrigger } from '@lynx-js/lynx-ui'
+import { Button, Input, KeyboardAwareTrigger, Switch } from '@lynx-js/lynx-ui'
 
-import { isOpencodeConnection } from './connection.js'
-import type { ConnectionContext, ConnectionFormStatus } from './connection.js'
+import {
+  defaultConnectionForKind,
+  isCodexConnection,
+  isOpencodeConnection,
+} from './connection.js'
+import type {
+  BackendKindLabel,
+  ConnectionContext,
+  ConnectionFormStatus,
+} from './connection.js'
 
 export interface ConnectionFormProps {
   connection: ConnectionContext
@@ -16,6 +24,50 @@ export interface ConnectionFormProps {
   onSecondaryAction?: () => void
 }
 
+interface KindSelectorProps {
+  activeKind: BackendKindLabel
+  onSelectKind: (kind: BackendKindLabel) => void
+}
+
+function pillClassName(active: boolean): string {
+  return active
+    ? 'connection-kind__pill connection-kind__pill--active'
+    : 'connection-kind__pill'
+}
+
+function KindSelector({ activeKind, onSelectKind }: KindSelectorProps) {
+  const handleOpencodeTap = useCallback(() => {
+    'background only'
+    if (activeKind !== 'opencode') {
+      onSelectKind('opencode')
+    }
+  }, [activeKind, onSelectKind])
+
+  const handleCodexTap = useCallback(() => {
+    'background only'
+    if (activeKind !== 'codex') {
+      onSelectKind('codex')
+    }
+  }, [activeKind, onSelectKind])
+
+  return (
+    <view className="connection-kind">
+      <view
+        className={pillClassName(activeKind === 'opencode')}
+        bindtap={handleOpencodeTap}
+      >
+        <text className="connection-kind__label">OpenCode</text>
+      </view>
+      <view
+        className={pillClassName(activeKind === 'codex')}
+        bindtap={handleCodexTap}
+      >
+        <text className="connection-kind__label">Codex</text>
+      </view>
+    </view>
+  )
+}
+
 export function ConnectionForm({
   connection,
   status,
@@ -27,88 +79,207 @@ export function ConnectionForm({
   onPrimaryAction,
   onSecondaryAction,
 }: ConnectionFormProps) {
-  // M3.1 stub: only the OpenCode form is rendered for now. The kind-branched
-  // form (Codex host/token/secure fields, kind selector) lands in M3.2.
-  if (!isOpencodeConnection(connection)) {
-    return null
-  }
+  const handleSelectKind = useCallback(
+    (kind: BackendKindLabel) => {
+      'background only'
+      onChange(defaultConnectionForKind(kind))
+    },
+    [onChange],
+  )
 
-  const opencodeConnection = connection
+  // Opencode-branch handlers (no-op when in codex branch).
+  const handleIpInput = useCallback(
+    (value: string) => {
+      'background only'
+      if (isOpencodeConnection(connection)) {
+        onChange({ ...connection, ip: value })
+      }
+    },
+    [connection, onChange],
+  )
 
-  const handleIpInput = useCallback((value: string) => {
-    'background only'
-    onChange({
-      ...opencodeConnection,
-      ip: value,
-    })
-  }, [opencodeConnection, onChange])
+  const handleOpencodePortInput = useCallback(
+    (value: string) => {
+      'background only'
+      if (isOpencodeConnection(connection)) {
+        onChange({ ...connection, port: value })
+      }
+    },
+    [connection, onChange],
+  )
 
-  const handlePortInput = useCallback((value: string) => {
-    'background only'
-    onChange({
-      ...opencodeConnection,
-      port: value,
-    })
-  }, [opencodeConnection, onChange])
+  const handlePasswordInput = useCallback(
+    (value: string) => {
+      'background only'
+      if (isOpencodeConnection(connection)) {
+        onChange({ ...connection, password: value })
+      }
+    },
+    [connection, onChange],
+  )
 
-  const handlePasswordInput = useCallback((value: string) => {
-    'background only'
-    onChange({
-      ...opencodeConnection,
-      password: value,
-    })
-  }, [opencodeConnection, onChange])
+  // Codex-branch handlers.
+  const handleHostInput = useCallback(
+    (value: string) => {
+      'background only'
+      if (isCodexConnection(connection)) {
+        onChange({ ...connection, host: value })
+      }
+    },
+    [connection, onChange],
+  )
+
+  const handleCodexPortInput = useCallback(
+    (value: string) => {
+      'background only'
+      if (isCodexConnection(connection)) {
+        onChange({ ...connection, port: value })
+      }
+    },
+    [connection, onChange],
+  )
+
+  const handleTokenInput = useCallback(
+    (value: string) => {
+      'background only'
+      if (isCodexConnection(connection)) {
+        onChange({ ...connection, token: value })
+      }
+    },
+    [connection, onChange],
+  )
+
+  const handleSecureChange = useCallback(
+    (checked: boolean) => {
+      'background only'
+      if (isCodexConnection(connection)) {
+        onChange({ ...connection, secure: checked })
+      }
+    },
+    [connection, onChange],
+  )
+
+  const containerClass = compact
+    ? 'connection-form connection-form--compact'
+    : 'connection-form'
 
   return (
-    <view className={compact ? 'connection-form connection-form--compact' : 'connection-form'}>
-      <KeyboardAwareTrigger className="connection-field">
-        <text className="connection-field__label">Server IP</text>
-        <Input
-          id="connection-ip"
-          value={opencodeConnection.ip}
-          placeholder="192.168.1.100"
-          className="ui-input"
-          onInput={handleIpInput}
-        />
-      </KeyboardAwareTrigger>
+    <view className={containerClass}>
+      <KindSelector activeKind={connection.kind} onSelectKind={handleSelectKind} />
 
-      <view className="connection-grid">
-        <KeyboardAwareTrigger className="connection-field connection-field--grid">
-          <text className="connection-field__label">Port</text>
-          <Input
-            id="connection-port"
-            value={opencodeConnection.port}
-            placeholder="3000"
-            type="number"
-            className="ui-input"
-            onInput={handlePortInput}
-          />
-        </KeyboardAwareTrigger>
+      {isOpencodeConnection(connection) ? (
+        <>
+          <KeyboardAwareTrigger className="connection-field">
+            <text className="connection-field__label">Server IP</text>
+            <Input
+              id="connection-ip"
+              value={connection.ip}
+              placeholder="192.168.1.100"
+              className="ui-input"
+              onInput={handleIpInput}
+            />
+          </KeyboardAwareTrigger>
 
-        <KeyboardAwareTrigger className="connection-field connection-field--grid">
-          <text className="connection-field__label">Password</text>
-          <Input
-            id="connection-password"
-            value={opencodeConnection.password}
-            placeholder="Optional"
-            type="password"
-            className="ui-input"
-            onInput={handlePasswordInput}
-          />
-        </KeyboardAwareTrigger>
-      </view>
+          <view className="connection-grid">
+            <KeyboardAwareTrigger className="connection-field connection-field--grid">
+              <text className="connection-field__label">Port</text>
+              <Input
+                id="connection-port"
+                value={connection.port}
+                placeholder="3000"
+                type="number"
+                className="ui-input"
+                onInput={handleOpencodePortInput}
+              />
+            </KeyboardAwareTrigger>
 
-      {status === 'error' && errorMessage.length > 0
-        ? (
-          <view className="error-banner">
-            <text className="error-text">{errorMessage}</text>
+            <KeyboardAwareTrigger className="connection-field connection-field--grid">
+              <text className="connection-field__label">Password</text>
+              <Input
+                id="connection-password"
+                value={connection.password}
+                placeholder="Optional"
+                type="password"
+                className="ui-input"
+                onInput={handlePasswordInput}
+              />
+            </KeyboardAwareTrigger>
           </view>
-        )
-        : null}
+        </>
+      ) : null}
 
-      <view className={secondaryLabel && onSecondaryAction ? 'connection-actions connection-actions--split' : 'connection-actions'}>
+      {isCodexConnection(connection) ? (
+        <>
+          <KeyboardAwareTrigger className="connection-field">
+            <text className="connection-field__label">Host</text>
+            <Input
+              id="connection-host"
+              value={connection.host}
+              placeholder="127.0.0.1"
+              className="ui-input"
+              onInput={handleHostInput}
+            />
+          </KeyboardAwareTrigger>
+
+          <view className="connection-grid">
+            <KeyboardAwareTrigger className="connection-field connection-field--grid">
+              <text className="connection-field__label">Port</text>
+              <Input
+                id="connection-port"
+                value={connection.port}
+                placeholder="7777"
+                type="number"
+                className="ui-input"
+                onInput={handleCodexPortInput}
+              />
+            </KeyboardAwareTrigger>
+
+            <KeyboardAwareTrigger className="connection-field connection-field--grid">
+              <text className="connection-field__label">Token</text>
+              <Input
+                id="connection-token"
+                value={connection.token}
+                placeholder="Optional"
+                type="password"
+                className="ui-input"
+                onInput={handleTokenInput}
+              />
+            </KeyboardAwareTrigger>
+          </view>
+
+          <view className="connection-secure-row">
+            <text className="connection-field__label">
+              Use secure WebSocket (wss://)
+            </text>
+            <Switch
+              id="connection-secure"
+              className="connection-secure-row__switch"
+              checked={connection.secure}
+              onChange={handleSecureChange}
+            />
+          </view>
+        </>
+      ) : null}
+
+      {status === 'error' && errorMessage.length > 0 ? (
+        <view className="error-banner">
+          <text className="error-text">{errorMessage}</text>
+        </view>
+      ) : null}
+
+      <view
+        className={
+          secondaryLabel && onSecondaryAction
+            ? 'connection-actions connection-actions--split'
+            : 'connection-actions'
+        }
+      >
         <Button
-          className={status === 'connecting' ? 'ui-button ui-button--primary ui-button--disabled' : 'ui-button ui-button--primary'}
+          className={
+            status === 'connecting'
+              ? 'ui-button ui-button--primary ui-button--disabled'
+              : 'ui-button ui-button--primary'
+          }
           disabled={status === 'connecting'}
           onClick={onPrimaryAction}
         >
@@ -119,18 +290,18 @@ export function ConnectionForm({
           </view>
         </Button>
 
-        {secondaryLabel && onSecondaryAction
-          ? (
-            <Button
-              className="ui-button ui-button--secondary"
-              onClick={onSecondaryAction}
-            >
-              <view className="ui-button__content">
-                <text className="ui-button__text ui-button__text--secondary">{secondaryLabel}</text>
-              </view>
-            </Button>
-          )
-          : null}
+        {secondaryLabel && onSecondaryAction ? (
+          <Button
+            className="ui-button ui-button--secondary"
+            onClick={onSecondaryAction}
+          >
+            <view className="ui-button__content">
+              <text className="ui-button__text ui-button__text--secondary">
+                {secondaryLabel}
+              </text>
+            </view>
+          </Button>
+        ) : null}
       </view>
     </view>
   )
