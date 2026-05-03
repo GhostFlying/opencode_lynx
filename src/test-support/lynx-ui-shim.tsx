@@ -19,6 +19,12 @@ type InputProps = CommonProps & {
   onInput?: (value: string) => void
 }
 
+type SwitchProps = CommonProps & {
+  checked?: boolean
+  defaultChecked?: boolean
+  onChange?: (checked: boolean) => void
+}
+
 type TextAreaProps = CommonProps & {
   value?: string
   placeholder?: string
@@ -77,7 +83,7 @@ const noopHandle: InputImperativeHandle = {
 }
 
 export const Input = forwardRef<InputImperativeHandle, InputProps>(function Input(
-  { value = '', placeholder, className = '', id }: InputProps,
+  { value = '', placeholder, className = '', id, type }: InputProps,
   ref,
 ) {
   useImperativeHandle(ref, () => noopHandle, [])
@@ -87,9 +93,21 @@ export const Input = forwardRef<InputImperativeHandle, InputProps>(function Inpu
       className={className}
       value={value}
       placeholder={placeholder}
+      type={type as 'text' | 'number' | 'password' | 'digit' | 'tel' | 'email' | undefined}
     />
   )
 })
+
+export function Switch({ checked = false, className = '', id, onChange }: SwitchProps) {
+  return (
+    <view
+      id={id}
+      className={className}
+      data-checked={checked ? 'true' : 'false'}
+      bindtap={onChange ? () => onChange(!checked) : undefined}
+    />
+  )
+}
 
 export const TextArea = forwardRef<InputImperativeHandle, TextAreaProps>(function TextArea(
   { value = '', placeholder, className = '', id }: TextAreaProps,

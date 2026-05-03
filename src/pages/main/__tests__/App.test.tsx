@@ -69,7 +69,11 @@ test('ordered happy path emits react_ready then ui_ready with shared run_id', as
   expect(onMounted).toHaveBeenCalledTimes(1)
 
   const { findByText } = getQueriesForElement(elementTree.root!)
-  const title = await findByText('OpenCode')
+  const title = await findByText((_content, element) => {
+    return element?.tagName?.toLowerCase() === 'text'
+      && element?.getAttribute('class') === 'hero__title'
+      && (element?.textContent ?? '') === 'OpenCode'
+  })
   const marker = await findByText('main_ready_marker')
   expect(title).toBeInTheDocument()
   expect(marker).toBeInTheDocument()

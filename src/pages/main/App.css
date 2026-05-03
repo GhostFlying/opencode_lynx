@@ -294,6 +294,52 @@
   flex-direction: column;
 }
 
+.connection-kind {
+  display: linear;
+  linear-direction: row;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(134, 127, 115, 0.10);
+}
+
+.connection-kind__pill {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 9px;
+  align-items: center;
+  justify-content: center;
+  display: flex;
+}
+
+.connection-kind__pill--active {
+  background: rgba(249, 246, 239, 0.96);
+  box-shadow: 0 1px 4px rgba(36, 38, 33, 0.12);
+}
+
+.connection-kind__label {
+  color: #53564e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.connection-kind__pill--active .connection-kind__label {
+  color: #22241f;
+}
+
+.connection-secure-row {
+  display: linear;
+  linear-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 2px;
+}
+
+.connection-secure-row__switch {
+  flex-shrink: 0;
+}
+
 .connection-form--compact {
   gap: 12px;
 }
