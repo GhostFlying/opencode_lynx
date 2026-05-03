@@ -214,7 +214,7 @@ describe('SessionListView backend facade behavior', () => {
     const result = render(
       <SessionListView
         client={client}
-        connection={{ ip: '127.0.0.1', port: '3000', password: 'secret' }}
+        connection={{ kind: 'opencode', ip: '127.0.0.1', port: '3000', password: 'secret' }}
         onConnectionTagChange={onConnectionTagChange}
         onKnownDirectoriesChange={onKnownDirectoriesChange}
       />,
@@ -253,6 +253,7 @@ describe('SessionListView backend facade behavior', () => {
       sessionId: 'session-1',
       sessionTitle: 'Facade Session',
       connection: {
+        kind: 'opencode',
         ip: '127.0.0.1',
         port: '3000',
         password: 'secret',

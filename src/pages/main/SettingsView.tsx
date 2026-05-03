@@ -4,7 +4,8 @@ import { Button, KeyboardAwareResponder } from '@lynx-js/lynx-ui'
 import { ConnectionForm } from './ConnectionForm.js'
 import {
   formatEndpoint,
-  maskPassword,
+  isOpencodeConnection,
+  maskCredential,
 } from './connection.js'
 import type {
   ConnectionContext,
@@ -75,8 +76,8 @@ export function SettingsView({
               <text className="meta-row__value">{formatEndpoint(connection)}</text>
             </view>
             <view className="meta-row">
-              <text className="meta-row__label">Password</text>
-              <text className="meta-row__value">{maskPassword(connection.password)}</text>
+              <text className="meta-row__label">{isOpencodeConnection(connection) ? 'Password' : 'Token'}</text>
+              <text className="meta-row__value">{maskCredential(connection)}</text>
             </view>
           </view>
 

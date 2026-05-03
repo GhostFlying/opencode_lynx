@@ -1,6 +1,7 @@
 import { useCallback } from '@lynx-js/react'
 import { Button, Input, KeyboardAwareTrigger } from '@lynx-js/lynx-ui'
 
+import { isOpencodeConnection } from './connection.js'
 import type { ConnectionContext, ConnectionFormStatus } from './connection.js'
 
 export interface ConnectionFormProps {
@@ -26,29 +27,37 @@ export function ConnectionForm({
   onPrimaryAction,
   onSecondaryAction,
 }: ConnectionFormProps) {
+  // M3.1 stub: only the OpenCode form is rendered for now. The kind-branched
+  // form (Codex host/token/secure fields, kind selector) lands in M3.2.
+  if (!isOpencodeConnection(connection)) {
+    return null
+  }
+
+  const opencodeConnection = connection
+
   const handleIpInput = useCallback((value: string) => {
     'background only'
     onChange({
-      ...connection,
+      ...opencodeConnection,
       ip: value,
     })
-  }, [connection, onChange])
+  }, [opencodeConnection, onChange])
 
   const handlePortInput = useCallback((value: string) => {
     'background only'
     onChange({
-      ...connection,
+      ...opencodeConnection,
       port: value,
     })
-  }, [connection, onChange])
+  }, [opencodeConnection, onChange])
 
   const handlePasswordInput = useCallback((value: string) => {
     'background only'
     onChange({
-      ...connection,
+      ...opencodeConnection,
       password: value,
     })
-  }, [connection, onChange])
+  }, [opencodeConnection, onChange])
 
   return (
     <view className={compact ? 'connection-form connection-form--compact' : 'connection-form'}>
@@ -56,7 +65,7 @@ export function ConnectionForm({
         <text className="connection-field__label">Server IP</text>
         <Input
           id="connection-ip"
-          value={connection.ip}
+          value={opencodeConnection.ip}
           placeholder="192.168.1.100"
           className="ui-input"
           onInput={handleIpInput}
@@ -68,7 +77,7 @@ export function ConnectionForm({
           <text className="connection-field__label">Port</text>
           <Input
             id="connection-port"
-            value={connection.port}
+            value={opencodeConnection.port}
             placeholder="3000"
             type="number"
             className="ui-input"
@@ -80,7 +89,7 @@ export function ConnectionForm({
           <text className="connection-field__label">Password</text>
           <Input
             id="connection-password"
-            value={connection.password}
+            value={opencodeConnection.password}
             placeholder="Optional"
             type="password"
             className="ui-input"
