@@ -25,20 +25,48 @@ import {
   seedNewSessionDefaults,
 } from '../new-session-model.js'
 
-const { storageGetMock, storageSetMock, createBackendClientMock } = vi.hoisted(() => ({
+const {
+  storageGetMock,
+  storageSetMock,
+  createBackendClientMock,
+  createCodexBackendClientMock,
+} = vi.hoisted(() => ({
   storageGetMock: vi.fn(),
   storageSetMock: vi.fn(),
   createBackendClientMock: vi.fn(),
+  createCodexBackendClientMock: vi.fn(),
 }))
 
 vi.mock('../ChatInput.js', () => ({
-  ChatInput: ({ onSend, disabled }: { onSend: (text: string) => void; disabled?: boolean }) => (
-    <view
-      className="composer-stub"
-      data-disabled={disabled ? 'true' : 'false'}
-      bindtap={() => onSend('hello world')}
-    />
-  ),
+  ChatInput: ({
+    onSend,
+    disabled,
+    agentPickerEnabled,
+    selection,
+  }: {
+    onSend: (text: string) => void
+    disabled?: boolean
+    agentPickerEnabled?: boolean
+    selection?: { agentLabel: string; modelLabel: string; effortLabel: string }
+  }) => {
+    // Encode props into class name segments so the test runtime (Lynx-react
+    // testing-library) does not reject custom data-* attribute names. The
+    // assertions below match against `.composer-stub` and class tokens.
+    const classNames = [
+      'composer-stub',
+      disabled ? 'composer-stub--disabled' : 'composer-stub--enabled',
+      agentPickerEnabled === false
+        ? 'composer-stub--no-agent-picker'
+        : 'composer-stub--agent-picker',
+      `composer-stub--model-${selection?.modelLabel ?? 'none'}`,
+    ]
+    return (
+      <view
+        className={classNames.join(' ')}
+        bindtap={() => onSend('hello world')}
+      />
+    )
+  },
 }))
 vi.mock('../../../navigation.js', () => ({ close: vi.fn() }))
 vi.mock('../../../storage.js', () => ({
@@ -53,6 +81,7 @@ vi.mock('../../../backends/index.js', async () => {
   return {
     ...actual,
     createOpencodeBackendClientFromConnection: createBackendClientMock,
+    createCodexBackendClientFromConnection: createCodexBackendClientMock,
   }
 })
 
@@ -123,11 +152,14 @@ describe('chat backend facade helpers', () => {
     expect(shouldStopThinkingForBackendEvent(delta)).toBe(false)
   })
 
-  it('parses route params from globalProps.routeParams', () => {
+  it('parses route params from globalProps.routeParams (back-compat opencode default)', () => {
     expect(parseChatRouteParams({
       routeParams: {
         sessionId: 's1',
         sessionTitle: 'Hello',
+        // No `kind` field — back-compat path defaults to opencode shape so
+        // any in-flight new-session route blob serialised before M3.1 still
+        // resolves correctly.
         connection: { ip: '1.2.3.4', port: '4567', password: 'pw' },
         isNewSession: false,
         knownDirectories: ['/repo/a', 12, '/repo/b'],
@@ -135,7 +167,7 @@ describe('chat backend facade helpers', () => {
     })).toEqual({
       sessionId: 's1',
       sessionTitle: 'Hello',
-      connection: { ip: '1.2.3.4', port: '4567', password: 'pw' },
+      connection: { kind: 'opencode', ip: '1.2.3.4', port: '4567', password: 'pw' },
       isNewSession: false,
       knownDirectories: ['/repo/a', '/repo/b'],
     })
@@ -151,7 +183,48 @@ describe('chat backend facade helpers', () => {
       },
     })).toEqual({
       isNewSession: true,
-      connection: { ip: '10.0.0.1', port: '3000', password: undefined },
+      connection: { kind: 'opencode', ip: '10.0.0.1', port: '3000', password: '' },
+    })
+  })
+
+  it('parses an explicit codex connection blob', () => {
+    expect(parseChatRouteParams({
+      routeParams: {
+        sessionId: 's2',
+        connection: {
+          kind: 'codex',
+          host: 'example.com',
+          port: '7777',
+          token: 'tok',
+          secure: true,
+        },
+        isNewSession: false,
+      },
+    })).toEqual({
+      sessionId: 's2',
+      connection: {
+        kind: 'codex',
+        host: 'example.com',
+        port: '7777',
+        token: 'tok',
+        secure: true,
+      },
+      isNewSession: false,
+    })
+  })
+
+  it('parses an explicit opencode connection blob', () => {
+    expect(parseChatRouteParams({
+      routeParams: {
+        connection: {
+          kind: 'opencode',
+          ip: '1.2.3.4',
+          port: '4567',
+          password: 'pw',
+        },
+      },
+    })).toEqual({
+      connection: { kind: 'opencode', ip: '1.2.3.4', port: '4567', password: 'pw' },
     })
   })
 
@@ -334,6 +407,7 @@ describe('Chat App new-session flow', () => {
     storageGetMock.mockResolvedValue(null)
     storageSetMock.mockReturnValue(undefined)
     createBackendClientMock.mockReset()
+    createCodexBackendClientMock.mockReset()
   })
 
   afterEach(() => {
@@ -489,6 +563,174 @@ describe('Chat App new-session flow', () => {
       expect(messagesMock).toHaveBeenCalledWith('session-existing-1')
     })
     expect(result.container.querySelector('.new-session-card')).toBeNull()
+
+    result.unmount()
+  })
+
+  it('codex backend hides the agent picker and skips the agents() round-trip', async () => {
+    setRouteParams({
+      isNewSession: true,
+      knownDirectories: [],
+      connection: {
+        kind: 'codex',
+        host: 'example.com',
+        port: '7777',
+        token: '',
+        secure: false,
+      },
+    })
+
+    const subscription = createSubscription()
+    const agentsMock = vi.fn(async () => [])
+    const providersMock = vi.fn(async () => ({
+      providers: [
+        {
+          id: 'codex',
+          name: 'Codex',
+          models: [
+            { id: 'gpt-5', name: 'GPT-5', reasoning: false, reasoningEfforts: [] },
+          ],
+        },
+      ],
+      defaults: { codex: 'gpt-5' },
+    }))
+    const codexClient: BackendClient = {
+      descriptor: { kind: 'codex', label: 'Codex' },
+      capabilities: {
+        sessions: true,
+        streaming: true,
+        catalog: true,
+        approvals: true,
+        pty: false,
+        remoteDiscovery: false,
+        agentPicker: false,
+        modelPicker: true,
+      },
+      sessions: {
+        list: vi.fn(),
+        create: vi.fn(async () => ({
+          backend: 'codex' as const,
+          id: 'codex-session-1',
+          backendMeta: {},
+        })),
+        get: vi.fn(),
+        messages: vi.fn(async () => []),
+        prompt: vi.fn(async () => ({ status: 'sent' })),
+      } as unknown as BackendClient['sessions'],
+      events: {
+        subscribe: vi.fn(() => subscription),
+      },
+      catalog: {
+        providers: providersMock,
+        agents: agentsMock,
+      } as unknown as NonNullable<BackendClient['catalog']>,
+    }
+    createCodexBackendClientMock.mockReturnValue(codexClient)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    await waitFor(() => {
+      expect(providersMock).toHaveBeenCalled()
+    })
+
+    // The agent picker chip in ChatInput should be hidden, and the codex
+    // adapter should never see an agents() call (capability gates it out).
+    expect(agentsMock).not.toHaveBeenCalled()
+    const composer = result.container.querySelector('.composer-stub')
+    expect(composer?.className).toContain('composer-stub--no-agent-picker')
+
+    // NewSessionCard should not render the Agent label either.
+    expect(result.queryByText('Agent')).toBeNull()
+    // Model field is still present.
+    expect(await result.findByText('Model')).toBeInTheDocument()
+
+    // Flat catalog (1 provider): chip shows just the model name, not
+    // "codex/gpt-5".
+    await waitFor(() => {
+      expect(composer?.className).toContain('composer-stub--model-GPT-5')
+    })
+
+    result.unmount()
+  })
+
+  it('codex prompt payload omits the agent field when none is selected', async () => {
+    setRouteParams({
+      isNewSession: true,
+      connection: {
+        kind: 'codex',
+        host: 'example.com',
+        port: '7777',
+        token: '',
+        secure: false,
+      },
+    })
+
+    const subscription = createSubscription()
+    const promptMock = vi.fn(async () => ({ status: 'sent' }))
+    const codexClient: BackendClient = {
+      descriptor: { kind: 'codex', label: 'Codex' },
+      capabilities: {
+        sessions: true,
+        streaming: true,
+        catalog: true,
+        approvals: true,
+        pty: false,
+        remoteDiscovery: false,
+        agentPicker: false,
+        modelPicker: true,
+      },
+      sessions: {
+        list: vi.fn(),
+        create: vi.fn(async () => ({
+          backend: 'codex' as const,
+          id: 'codex-session-2',
+          backendMeta: {},
+        })),
+        get: vi.fn(),
+        messages: vi.fn(async () => []),
+        prompt: promptMock,
+      } as unknown as BackendClient['sessions'],
+      events: { subscribe: vi.fn(() => subscription) },
+      catalog: {
+        providers: vi.fn(async () => ({
+          providers: [
+            {
+              id: 'codex',
+              name: 'Codex',
+              models: [{ id: 'gpt-5', name: 'GPT-5', reasoning: false, reasoningEfforts: [] }],
+            },
+          ],
+          defaults: { codex: 'gpt-5' },
+        })),
+        agents: vi.fn(async () => []),
+      } as unknown as NonNullable<BackendClient['catalog']>,
+    }
+    createCodexBackendClientMock.mockReturnValue(codexClient)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    await waitFor(() => {
+      expect(codexClient.catalog!.providers).toHaveBeenCalled()
+    })
+
+    const composer = result.container.querySelector('.composer-stub')
+    expect(composer).not.toBeNull()
+    fireEvent.tap(composer!)
+
+    await waitFor(() => {
+      expect(promptMock).toHaveBeenCalledTimes(1)
+    })
+    const firstCall = promptMock.mock.calls[0] as unknown as [string, Record<string, unknown>]
+    const payload = firstCall[1]
+    expect(payload).toEqual(
+      expect.objectContaining({
+        parts: [{ type: 'text', text: 'hello world' }],
+        model: { providerID: 'codex', modelID: 'gpt-5' },
+      }),
+    )
+    expect(payload.agent).toBeUndefined()
 
     result.unmount()
   })

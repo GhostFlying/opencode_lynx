@@ -12,6 +12,7 @@ export interface ChatInputProps {
   disabled?: boolean
   selection: ChatInputSelection
   variantAvailable: boolean
+  agentPickerEnabled?: boolean
   areaStyle?: Record<string, string>
   onOpenAgentPicker: () => void
   onOpenModelPicker: () => void
@@ -23,6 +24,7 @@ export function ChatInput({
   disabled,
   selection,
   variantAvailable,
+  agentPickerEnabled = true,
   areaStyle,
   onOpenAgentPicker,
   onOpenModelPicker,
@@ -92,10 +94,12 @@ export function ChatInput({
         {/* Toolbar inside card */}
         <view className="chat-input-toolbar">
           <view className="chat-input-left">
-            <view className="chat-chip" bindtap={handleAgentTap}>
-              <text className="chat-chip-text">{selection.agentLabel}</text>
-              <text className="chat-chip-caret">{'\u25BE'}</text>
-            </view>
+            {agentPickerEnabled ? (
+              <view className="chat-chip" bindtap={handleAgentTap}>
+                <text className="chat-chip-text">{selection.agentLabel}</text>
+                <text className="chat-chip-caret">{'\u25BE'}</text>
+              </view>
+            ) : null}
             <view className="chat-chip" bindtap={handleModelTap}>
               <text className="chat-chip-text">{selection.modelLabel}</text>
               <text className="chat-chip-caret">{'\u25BE'}</text>

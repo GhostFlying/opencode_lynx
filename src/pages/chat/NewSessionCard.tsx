@@ -9,6 +9,7 @@ export interface NewSessionCardProps {
   modelLabel: string
   effortLabel: string
   variantAvailable: boolean
+  agentPickerEnabled?: boolean
   onDirectoryInput: (next: string) => void
   onPickDirectory: (dir: string) => void
   onOpenAgent: () => void
@@ -42,6 +43,7 @@ export function NewSessionCard({
   modelLabel,
   effortLabel,
   variantAvailable,
+  agentPickerEnabled = true,
   onDirectoryInput,
   onPickDirectory,
   onOpenAgent,
@@ -101,13 +103,15 @@ export function NewSessionCard({
         ) : null}
       </view>
 
-      <view className="new-session-card__field">
-        <text className="new-session-card__label">Agent</text>
-        <view className="new-session-card__pill" bindtap={onOpenAgent}>
-          <text className="new-session-card__pill-text">{agentLabel}</text>
-          <text className="new-session-card__pill-caret">{'▾'}</text>
+      {agentPickerEnabled ? (
+        <view className="new-session-card__field">
+          <text className="new-session-card__label">Agent</text>
+          <view className="new-session-card__pill" bindtap={onOpenAgent}>
+            <text className="new-session-card__pill-text">{agentLabel}</text>
+            <text className="new-session-card__pill-caret">{'▾'}</text>
+          </view>
         </view>
-      </view>
+      ) : null}
 
       <view className="new-session-card__field">
         <text className="new-session-card__label">Model</text>

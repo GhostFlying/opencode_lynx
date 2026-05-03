@@ -4,7 +4,6 @@ import { close } from '../../navigation.js'
 import { px, readSafeAreaInsetsFromGlobalProps } from '../../safeArea.js'
 import { storageGet, storageSet } from '../../storage.js'
 import {
-  createOpencodeBackendClientFromConnection,
   findBackendModel,
   getBackendModelReasoningEffortKeys,
   inferSelectionFromBackendMessages,
@@ -17,6 +16,7 @@ import type {
   BackendProviderInfo,
   BackendSubscription,
 } from '../../backends/index.js'
+import { createBackendClientFromConnection } from '../main/connection.js'
 import {
   FIXTURE_AGENTS,
   FIXTURE_PROVIDERS,
@@ -275,13 +275,9 @@ export function App() {
   const initClient = useCallback(() => {
     'background only'
     if (clientRef.current) return clientRef.current
-    if (!connection?.ip || !connection.port) return null
+    if (!connection) return null
     try {
-      const client = createOpencodeBackendClientFromConnection({
-        ip: connection.ip,
-        port: connection.port,
-        password: connection.password,
-      })
+      const client = createBackendClientFromConnection(connection)
       clientRef.current = client
       return client
     } catch {
@@ -321,7 +317,7 @@ export function App() {
   const refreshMessages = useCallback(async (showLoading: boolean) => {
     'background only'
     // Fixture mode: no server connection — load local sample data
-    if (!connection?.ip) {
+    if (!connection) {
       const fixtureMsgs = getFixtureMessages(sessionId || undefined)
       const visibleCount = countVisibleMessageItems(fixtureMsgs, false)
       setMessages(fixtureMsgs)
@@ -468,7 +464,7 @@ export function App() {
   // SSE subscription — drives live streaming updates and the sending indicator.
   useEffect(() => {
     'background only'
-    if (!connection?.ip || !sessionId) return
+    if (!connection || !sessionId) return
     const client = initClient()
     if (!client?.events?.subscribe) return
 
@@ -509,23 +505,29 @@ export function App() {
   // we have; the pickers just show "No options available" in that case.
   useEffect(() => {
     'background only'
-    if (!connection?.ip) return // fixture mode handled in refreshMessages
+    if (!connection) return // fixture mode handled in refreshMessages
     const client = initClient()
     if (!client?.catalog) return
+    const agentPickerEnabled = client.capabilities.agentPicker !== false
     let cancelled = false
     void (async () => {
       try {
+        // Skip the agents() round-trip when the backend doesn't support an
+        // agent picker (e.g. Codex). The catalog API would return [] anyway,
+        // but we save the call and keep behavior explicit.
         const [providersRes, agentsRes] = await Promise.all([
           client.catalog!.providers(),
-          client.catalog!.agents(),
+          agentPickerEnabled
+            ? client.catalog!.agents()
+            : Promise.resolve<BackendAgentInfo[]>([]),
         ])
         if (cancelled) return
         setProvidersCatalog([...providersRes.providers])
         setProviderDefaults(providersRes.defaults)
         setAgentsCatalog([...agentsRes])
         // If messages didn't supply a selection yet, fall back to server
-        // defaults (first agent + first provider's default model). Still
-        // gated on storage lookup so a stored pick wins.
+        // defaults (first provider's default model + first agent if any).
+        // Still gated on storage lookup so a stored pick wins.
         if (storageResolvedRef.current && !selectionInitializedRef.current) {
           selectionInitializedRef.current = true
           const firstAgent = agentsRes.find(a => a.name === 'build') ?? agentsRes[0]
@@ -535,9 +537,11 @@ export function App() {
             ? providersRes.defaults[firstProviderID]
               ?? providersRes.providers.find(p => p.id === firstProviderID)?.models[0]?.id
             : undefined
-          if (firstAgent && firstProviderID && firstModelID) {
+          if (firstProviderID && firstModelID) {
             applySelection({
-              agent: firstAgent.name,
+              // Empty agent string when capability is off — chat App treats
+              // empty as "no agent" and the prompt payload omits the field.
+              agent: firstAgent?.name ?? '',
               providerID: firstProviderID,
               modelID: firstModelID,
               variant: null,
@@ -589,7 +593,9 @@ export function App() {
         providerID: selection.providerID,
         modelID: selection.modelID,
       },
-      agent: selection.agent,
+      // Only include `agent` when the selection actually has one. The Codex
+      // adapter ignores it but stay hygienic across backends.
+      ...(selection.agent ? { agent: selection.agent } : {}),
       parts: [{ type: 'text', text }],
       ...(selection.variant ? { reasoningEffort: selection.variant } : {}),
     })
@@ -677,6 +683,18 @@ export function App() {
   const variantKeys = sortEffortKeys(getBackendModelReasoningEffortKeys(currentModel))
   const variantAvailable = variantKeys.length > 0
 
+  // Capability gate for the agent picker. Lazy-read off the cached client so
+  // fixture mode (no client) still keeps the historical "agent picker on"
+  // behaviour the demo data expects. Codex sets this to false.
+  const cachedClient = clientRef.current
+  const agentPickerEnabled = cachedClient
+    ? cachedClient.capabilities.agentPicker !== false
+    : true
+  // Flat catalog (single provider, e.g. Codex) collapses the provider/model
+  // label to model-only. Selection storage still uses `${providerID}/${modelID}`;
+  // only the visual representation changes.
+  const hasFlatCatalog = providersCatalog.length <= 1
+
   const agentLabel = deriveAgentLabel(selection)
   const modelLabel = deriveModelLabel(selection, providersCatalog)
   const effortLabel = deriveEffortLabel(selection)
@@ -697,7 +715,9 @@ export function App() {
       .map(m => ({
         key: `${p.id}/${m.id}`,
         title: m.name,
-        subtitle: p.name,
+        // For flat catalogs (one provider) drop the provider subtitle — the
+        // grouping reads as redundant noise when there's nothing to group.
+        ...(hasFlatCatalog ? {} : { subtitle: p.name }),
       })),
   )
 
@@ -818,7 +838,7 @@ export function App() {
               <view className="chat-state-card">
                 <text className="chat-state-card__title">Loading messages...</text>
                 <text className="chat-state-card__body">
-                  Pulling the latest conversation from your OpenCode session.
+                  Pulling the latest conversation from your backend session.
                 </text>
               </view>
             </view>
@@ -842,6 +862,7 @@ export function App() {
                 modelLabel={modelLabel}
                 effortLabel={effortLabel}
                 variantAvailable={variantAvailable}
+                agentPickerEnabled={agentPickerEnabled}
                 onDirectoryInput={handleDirectoryInput}
                 onPickDirectory={handlePickDirectory}
                 onOpenAgent={handleOpenAgent}
@@ -913,6 +934,7 @@ export function App() {
           disabled={sending}
           selection={chatInputSelection}
           variantAvailable={variantAvailable}
+          agentPickerEnabled={agentPickerEnabled}
           onOpenAgentPicker={handleOpenAgent}
           onOpenModelPicker={handleOpenModel}
           onOpenEffortPicker={handleOpenEffort}
@@ -922,7 +944,7 @@ export function App() {
         </KeyboardAwareRoot>
       </view>
 
-      {pickerKind === 'agent' ? (
+      {pickerKind === 'agent' && agentPickerEnabled ? (
         <PickerOverlay
           title="Agent"
           options={agentOptions}
