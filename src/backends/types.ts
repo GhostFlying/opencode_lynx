@@ -133,6 +133,13 @@ export type BackendEventType =
   | 'connection.state'
   | 'resync.required'
   | 'raw'
+  | 'turn.started'
+  | 'turn.completed'
+  | 'tool.started'
+  | 'tool.delta'
+  | 'tool.completed'
+  | 'approval.requested'
+  | 'approval.resolved'
 
 export interface BackendEvent {
   backend: BackendKind
@@ -144,6 +151,8 @@ export interface BackendEvent {
   messageID?: string
   partID?: string
   status?: string
+  turnID?: string
+  approvalID?: string
 }
 
 export interface BackendSubscribeOptions {
@@ -184,12 +193,22 @@ export interface BackendCatalogApi {
   agents(scope?: BackendScope): Promise<BackendAgentInfo[]>
 }
 
+export interface BackendApprovalDecision {
+  kind: string
+  payload?: Record<string, unknown>
+}
+
+export interface BackendApprovalsApi {
+  respond(approvalID: string, decision: BackendApprovalDecision): Promise<void>
+}
+
 export interface BackendClient {
   readonly descriptor: BackendDescriptor
   readonly capabilities: BackendCapabilities
   readonly sessions: BackendSessionsApi
   readonly events: BackendEventsApi
   readonly catalog?: BackendCatalogApi
+  readonly approvals?: BackendApprovalsApi
 }
 
 export interface OpencodeBackendTarget {

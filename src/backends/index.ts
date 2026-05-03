@@ -1,5 +1,7 @@
 export type {
   BackendAgentInfo,
+  BackendApprovalDecision,
+  BackendApprovalsApi,
   BackendCapabilities,
   BackendCatalogApi,
   BackendClient,
