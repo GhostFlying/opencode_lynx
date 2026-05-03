@@ -12,11 +12,15 @@ Current stage:
 
 - OpenCode production page path is migrated to this facade
 - types, registry, facade, and OpenCode adapter exist
-- Codex and Claude remain unimplemented
+- Codex adapter implemented (sessions, streaming, approvals, catalog) against
+  `codex app-server` over WebSocket
+- Claude adapter remains unimplemented
 - adapter behavior is covered by focused unit tests and page-level facade
   migration tests
 - OpenCode facade readiness is also covered by local mock HTTP/SSE integration
   tests, not only object-level stubs
+- Codex adapter readiness is covered by an in-process mock `app-server` JSON-RPC
+  integration test
 - `main` and `chat` pages consume `BackendClient` from this layer instead of
   importing the OpenCode wrapper directly
 
@@ -48,6 +52,21 @@ Current stage:
 - `opencode/page-migration.ts`
   - thin helper layer used by page code for OpenCode connection/config/client
     creation through the backend facade
+- `codex/adapter.ts`
+  - thin adapter that maps `codex app-server` JSON-RPC into the shared
+    backend-neutral contract
+- `codex/protocol.ts`
+  - JSON-RPC 2.0 client over `backend.channel.*`, owns reconnect, request
+    correlation, and notification fan-out
+- `codex/channel.ts`
+  - WebSocket channel abstraction over the native `backend.channel.*` bridge,
+    with state and message subscriptions
+- `codex/mapper.ts`
+  - Codex notification → unified event translation (sessions, deltas, tool
+    lifecycle, approvals)
+- `codex/page-migration.ts`
+  - thin helper layer used by page code for Codex connection/config/client
+    creation through the backend facade
 - `ui-mappers.ts`
   - small page-facing helpers for backend-neutral chat selection inference and
     catalog lookup
@@ -56,9 +75,8 @@ Current stage:
 
 The following items are intentionally not implemented yet:
 
-- Codex adapter
 - Claude adapter
-- backend-native bridge contracts
-- backend selection UI
+- Codex agent picker surface (capability `agentPicker: false` in v1)
+- Codex reconnect tuning beyond the v1 fixed schedule
 
-Those arrive in later phases after OpenCode parity is validated.
+Those arrive in later phases after OpenCode and Codex parity is validated.
