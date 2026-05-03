@@ -61,6 +61,7 @@ android {
         implementation(libs.androidx.core.ktx)
         implementation(libs.androidx.appcompat)
         testImplementation(libs.junit)
+        testImplementation("com.squareup.okhttp3:mockwebserver:4.9.0")
         androidTestImplementation(libs.androidx.junit)
         androidTestImplementation(libs.androidx.espresso.core)
         androidTestImplementation(libs.uiautomator)
