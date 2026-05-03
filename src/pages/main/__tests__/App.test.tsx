@@ -197,7 +197,7 @@ test('retry contract uses bounded attempts up to 3 and preserves phase ordering'
 describe('buildNewSessionScheme', () => {
   test('encodes connection, isNewSession flag, and known directories', () => {
     const scheme = buildNewSessionScheme(
-      { ip: '10.0.0.1', port: '4567', password: 'pw' },
+      { kind: 'opencode', ip: '10.0.0.1', port: '4567', password: 'pw' },
       ['/repo/a', '/repo/b'],
     )
 
@@ -205,7 +205,7 @@ describe('buildNewSessionScheme', () => {
 
     const encoded = scheme.split('route_params=')[1]!
     expect(JSON.parse(decodeURIComponent(encoded))).toEqual({
-      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+      connection: { kind: 'opencode', ip: '10.0.0.1', port: '4567', password: 'pw' },
       isNewSession: true,
       knownDirectories: ['/repo/a', '/repo/b'],
     })
@@ -280,6 +280,7 @@ function createFakeBackendClient(): BackendClient {
 test('+ button on connected screen navigates to chat with new-session route params', async () => {
   vi.mocked(open).mockClear()
   readSavedConnectionWithRetryMock.mockResolvedValue({
+    kind: 'opencode',
     ip: '10.0.0.1',
     port: '4567',
     password: 'pw',
@@ -287,7 +288,7 @@ test('+ button on connected screen navigates to chat with new-session route para
   const fakeClient = createFakeBackendClient()
   connectToBackendClientMock.mockResolvedValue({
     client: fakeClient,
-    connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    connection: { kind: 'opencode', ip: '10.0.0.1', port: '4567', password: 'pw' },
     serverLabel: '10.0.0.1:4567',
   })
 
@@ -317,7 +318,7 @@ test('+ button on connected screen navigates to chat with new-session route para
   const scheme = vi.mocked(open).mock.calls[0]![0].scheme
   const encoded = scheme.split('route_params=')[1]!
   expect(JSON.parse(decodeURIComponent(encoded))).toEqual({
-    connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    connection: { kind: 'opencode', ip: '10.0.0.1', port: '4567', password: 'pw' },
     isNewSession: true,
     knownDirectories: ['/repo/known-one'],
   })
