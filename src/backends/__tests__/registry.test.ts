@@ -54,12 +54,38 @@ function createStubClient(kind: 'opencode' | 'codex' | 'claude'): BackendClient 
 }
 
 describe('backend registry', () => {
-  it('registers OpenCode by default', () => {
+  it('registers OpenCode and Codex by default', () => {
     const registry = createBackendRegistry()
 
     expect(registry.has('opencode')).toBe(true)
-    expect(registry.has('codex')).toBe(false)
+    expect(registry.has('codex')).toBe(true)
     expect(registry.has('claude')).toBe(false)
+  })
+
+  it('creates a Codex client through the default factory when given a valid config', () => {
+    const registry = createBackendRegistry()
+    const client = registry.create({
+      kind: 'codex',
+      config: { url: 'ws://127.0.0.1:4000' },
+    })
+    expect(client.descriptor).toEqual({ kind: 'codex', label: 'Codex' })
+  })
+
+  it('rejects malformed Codex configs with invalid_backend_input', () => {
+    const registry = createBackendRegistry()
+    try {
+      registry.create({
+        kind: 'codex',
+        config: {},
+      })
+      throw new Error('expected registry.create to throw')
+    } catch (error) {
+      expect(error).toBeInstanceOf(BackendFacadeError)
+      expect(error).toMatchObject({
+        code: 'invalid_backend_input',
+        message: 'codex backend requires a url string',
+      })
+    }
   })
 
   it('creates a backend client through the registered factory', () => {
@@ -87,11 +113,6 @@ describe('backend registry', () => {
         opencode: vi.fn(() => createStubClient('opencode')),
       },
     })
-
-    expect(() => registry.create({
-      kind: 'codex',
-      config: {},
-    })).toThrow(BackendFacadeError)
 
     try {
       registry.create({

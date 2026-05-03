@@ -125,13 +125,6 @@ describe('backend facade', () => {
   })
 
   it('throws unsupported_backend for unimplemented default backends', () => {
-    expect(() =>
-      createBackendFacade({
-        kind: 'codex',
-        config: {},
-      }),
-    ).toThrow(BackendFacadeError)
-
     try {
       createBackendFacade({
         kind: 'claude',
@@ -142,6 +135,30 @@ describe('backend facade', () => {
       expect(error).toMatchObject({
         name: 'BackendFacadeError',
         code: 'unsupported_backend',
+      })
+    }
+  })
+
+  it('builds a Codex client through the default registry path', () => {
+    const client = createBackendFacade({
+      kind: 'codex',
+      config: { url: 'ws://127.0.0.1:4000' },
+    })
+    expect(client.descriptor).toEqual({ kind: 'codex', label: 'Codex' })
+  })
+
+  it('rejects malformed Codex configs with invalid_backend_input', () => {
+    try {
+      createBackendFacade({
+        kind: 'codex',
+        config: {},
+      })
+      throw new Error('expected createBackendFacade to throw')
+    } catch (error) {
+      expect(error).toBeInstanceOf(BackendFacadeError)
+      expect(error).toMatchObject({
+        code: 'invalid_backend_input',
+        message: 'codex backend requires a url string',
       })
     }
   })
