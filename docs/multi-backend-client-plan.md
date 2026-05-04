@@ -2,24 +2,28 @@
 
 ## Status
 
-This document describes a **planned** architecture for expanding the current mobile client from an OpenCode-only client into a client that can support:
-
-- OpenCode
-- Codex
-- Claude Code
-
-It does **not** mean those backends are already implemented in this repository.
+This document describes the provider-neutral backend architecture used
+by the mobile client. OpenCode and Codex are shipped; Claude Code is
+still planned.
 
 Today, the repository ships:
 
-- a Lynx mobile client wrapper centered on OpenCode transport and session flows
-- native bridge networking for REST and SSE plus `backend.channel.*` for
-  bidirectional WebSocket channels (used by Codex)
+- a Lynx mobile client with a kind-aware connection form
+  (`opencode` / `codex` pills) and storage migration from the legacy
+  OpenCode-only key
+- native bridge networking for REST + SSE (OpenCode) plus
+  `backend.channel.*` for bidirectional WebSocket channels (used by
+  Codex)
 - a `src/backends/` layer with shared types, registry, facade, OpenCode
-  adapter, and Codex adapter (v1)
+  adapter, and Codex adapter (v1, JSON-RPC 2.0 over `backend.channel.*`)
 - production `main` and `chat` pages using the backend facade for both
-  OpenCode and Codex, with kind selection in the connection form
-- no Claude adapter implementation yet
+  OpenCode and Codex, with capability gating (e.g. agent picker hidden
+  when the backend reports `agentPicker:false`)
+- no Claude adapter implementation yet (`BackendKind` declares
+  `'claude'` but the registry has no factory)
+
+For the manual smoke recipe see
+[`./codex-smoke-recipe.md`](./codex-smoke-recipe.md).
 
 ## Problem Statement
 
