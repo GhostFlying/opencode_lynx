@@ -184,6 +184,11 @@ export function createCodexProtocolClient(opts: CreateCodexProtocolOptions): Cod
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let openInFlight = false
   let closedByCaller = false
+  // Idempotency guard for the current open cycle. Prevents double cleanup +
+  // double `attempt` increment when both the channel state listener and the
+  // handshake catch-block observe the same termination event. Reset at the
+  // top of every openConnection() pass.
+  let terminationHandled = false
   // Tracks whether we've started the initial open() so request()/notify()
   // calls before bootstrap kick the lifecycle.
   let bootstrapStarted = false
@@ -304,6 +309,8 @@ export function createCodexProtocolClient(opts: CreateCodexProtocolOptions): Cod
 
   function handleChannelTermination(reason: unknown): void {
     if (closedByCaller) return
+    if (terminationHandled) return
+    terminationHandled = true
     initialized = false
     rejectAllPending(new Error('protocol: channel closed during request'))
     failOutstandingServerRequests()
@@ -443,6 +450,7 @@ export function createCodexProtocolClient(opts: CreateCodexProtocolOptions): Cod
     if (closedByCaller) return
     if (openInFlight) return
     openInFlight = true
+    terminationHandled = false
     setState({ status: 'connecting', attempt })
 
     // Reset per-session counters.

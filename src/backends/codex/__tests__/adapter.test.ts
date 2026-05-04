@@ -548,23 +548,28 @@ describe('createCodexBackendAdapter / approvals.respond', () => {
     fake.pushServerRequest(req)
     expect(events.some(e => e.type === 'approval.requested')).toBe(true)
     const requested = events.find(e => e.type === 'approval.requested')!
-    expect(requested.approvalID).toBe('srv-1')
+    // approvalID is opaque to callers — read it from the event rather than
+    // assuming any specific encoding. (mapper uses JSON.stringify so a
+    // string id 'srv-1' surfaces as '"srv-1"', preserving id-type identity.)
+    const approvalID = requested.approvalID!
 
-    await client.approvals!.respond('srv-1', { kind: 'accept' })
+    await client.approvals!.respond(approvalID, { kind: 'accept' })
     expect(req.responded.result).toEqual({ decision: 'accept' })
     expect(events.some(e => e.type === 'approval.resolved')).toBe(true)
   })
 
   it('translates acceptWithExecpolicyAmendment payload into the wire object form', async () => {
+    const events: BackendEvent[] = []
     const { client, fake } = makeAdapter({})
-    client.events.subscribe({ onEvent: () => {} })
+    client.events.subscribe({ onEvent: e => events.push(e) })
     const req = makeServerRequest(
       'item/commandExecution/requestApproval',
       { threadId: 't', turnId: 'u', itemId: 'i', command: 'x', cwd: '/' },
       'srv-2',
     )
     fake.pushServerRequest(req)
-    await client.approvals!.respond('srv-2', {
+    const approvalID = events.find(e => e.type === 'approval.requested')!.approvalID!
+    await client.approvals!.respond(approvalID, {
       kind: 'acceptWithExecpolicyAmendment',
       payload: { execpolicy_amendment: { foo: 'bar' } },
     })
@@ -574,16 +579,18 @@ describe('createCodexBackendAdapter / approvals.respond', () => {
   })
 
   it('throws BackendFacadeError on unsupported decision kind', async () => {
+    const events: BackendEvent[] = []
     const { client, fake } = makeAdapter({})
-    client.events.subscribe({ onEvent: () => {} })
+    client.events.subscribe({ onEvent: e => events.push(e) })
     const req = makeServerRequest(
       'item/commandExecution/requestApproval',
       { threadId: 't' },
       'srv-3',
     )
     fake.pushServerRequest(req)
+    const approvalID = events.find(e => e.type === 'approval.requested')!.approvalID!
     await expect(
-      client.approvals!.respond('srv-3', { kind: 'totallyMadeUp' }),
+      client.approvals!.respond(approvalID, { kind: 'totallyMadeUp' }),
     ).rejects.toBeInstanceOf(BackendFacadeError)
   })
 
@@ -595,26 +602,30 @@ describe('createCodexBackendAdapter / approvals.respond', () => {
   })
 
   it('fileChange approvals only accept plain string decisions', async () => {
+    const events: BackendEvent[] = []
     const { client, fake } = makeAdapter({})
-    client.events.subscribe({ onEvent: () => {} })
+    client.events.subscribe({ onEvent: e => events.push(e) })
     const req = makeServerRequest(
       'item/fileChange/requestApproval',
       { threadId: 't', turnId: 'u', itemId: 'i' },
       'srv-fc',
     )
     fake.pushServerRequest(req)
-    await client.approvals!.respond('srv-fc', { kind: 'decline' })
+    const firstApprovalID = events.find(e => e.type === 'approval.requested')!.approvalID!
+    await client.approvals!.respond(firstApprovalID, { kind: 'decline' })
     expect(req.responded.result).toEqual({ decision: 'decline' })
 
     // Build a second pending approval and try a structured decision — must throw.
+    const before = events.filter(e => e.type === 'approval.requested').length
     const req2 = makeServerRequest(
       'item/fileChange/requestApproval',
       { threadId: 't', turnId: 'u', itemId: 'i' },
       'srv-fc-2',
     )
     fake.pushServerRequest(req2)
+    const secondApprovalID = events.filter(e => e.type === 'approval.requested')[before]!.approvalID!
     await expect(
-      client.approvals!.respond('srv-fc-2', {
+      client.approvals!.respond(secondApprovalID, {
         kind: 'acceptWithExecpolicyAmendment',
         payload: { execpolicy_amendment: { foo: 'bar' } },
       }),
@@ -642,7 +653,8 @@ describe('createCodexBackendAdapter / approvals.respond', () => {
       'srv-shared',
     )
     fake.pushServerRequest(req)
-    await client.approvals!.respond('srv-shared', { kind: 'accept' })
+    const approvalID = a.find(e => e.type === 'approval.requested')!.approvalID!
+    await client.approvals!.respond(approvalID, { kind: 'accept' })
     const aResolved = a.filter(e => e.type === 'approval.resolved')
     const bResolved = b.filter(e => e.type === 'approval.resolved')
     expect(aResolved).toHaveLength(1)

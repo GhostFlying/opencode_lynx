@@ -535,6 +535,57 @@ describe('createCodexProtocolClient — reconnect', () => {
     }
   })
 
+  it('does not double-handle termination when channel closes during handshake', async () => {
+    // Regression: when the socket closes while runHandshake() is awaiting
+    // initialize, both the channel state listener and the catch-block can
+    // observe the same termination event. Without the per-cycle guard,
+    // handleChannelTermination ran twice — the `attempt` counter incremented
+    // from 0→1→2 and the second pass cleared the first reconnect timer and
+    // rescheduled at the next retry tier (20ms instead of 10ms).
+    vi.useFakeTimers()
+    try {
+      const factory = createFakeChannelFactory()
+      const client = createCodexProtocolClient({
+        url: 'ws://test',
+        openChannel: factory.open,
+        clientInfo: STD_CLIENT_INFO,
+        retrySchedule: [10, 20, 40],
+      })
+      const states: ProtocolConnectionState[] = []
+      client.onConnectionState((s) => states.push(s))
+
+      // Drive the first channel open + initialize-frame send.
+      await vi.advanceTimersByTimeAsync(0)
+      await Promise.resolve()
+      expect(factory.channels.length).toBe(1)
+      const ch1 = factory.channels[0]!
+      await Promise.resolve()
+      expect(ch1.sent.length).toBeGreaterThanOrEqual(1)
+      expect(ch1.sent[0]!.method).toBe('initialize')
+
+      // Close the channel mid-handshake (no initialize response).
+      ch1.pushState({ state: 'closed', code: 1006 })
+      // Drain microtasks so the handshake catch-block runs too.
+      await Promise.resolve()
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+      await Promise.resolve()
+
+      const reconnecting = states.filter((s) => s.status === 'reconnecting')
+      expect(reconnecting.length).toBe(1)
+      expect(reconnecting[0]!.attempt).toBe(1)
+
+      // The first retry tier (10ms) must still apply — not skipped to 20ms.
+      await vi.advanceTimersByTimeAsync(10)
+      await Promise.resolve()
+      expect(factory.channels.length).toBe(2)
+
+      await client.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('transitions to failed (no retry) when retrySchedule is empty', async () => {
     const factory = createFakeChannelFactory()
     const client = createCodexProtocolClient({

@@ -487,7 +487,12 @@ export function createCodexMapper(opts?: CreateCodexMapperOptions): CodexMapper 
   }
 
   function mapServerRequest(req: ServerInitiatedRequest): BackendEvent | null {
-    const approvalID = String(req.id)
+    // JSON-RPC 2.0 lets ids be either string or number. `String(1)` and
+    // `String('1')` both produce `"1"`, which would collapse two distinct
+    // pending approvals into the same map key. JSON.stringify preserves the
+    // discrimination: 1 → "1", "1" → "\"1\"". The roundtrip is opaque to
+    // the caller (they pass approvalID back unchanged).
+    const approvalID = JSON.stringify(req.id)
     const params = (req.params ?? {}) as Record<string, unknown>
     const threadID = typeof params.threadId === 'string' ? params.threadId : undefined
     const turnID = typeof params.turnId === 'string' ? params.turnId : undefined
