@@ -16,6 +16,7 @@ import {
   readSavedConnectionWithRetry,
 } from './connection.js';
 import type { ConnectionContext, ConnectionFormStatus, ConnectionTag } from './connection.js';
+import { backendLogoSvg } from './backend-logos.js';
 import type { BackendClient } from '../../backends/index.js';
 import type { TouchEvent } from '@lynx-js/types';
 import { px, readSafeAreaInsetsFromGlobalProps } from '../../safeArea.js';
@@ -655,6 +656,14 @@ export function App({
 
                           <view className="topbar__center">
                             <view className={`status-pill status-pill--${headerStatusTone}`}>
+                              {connection ? (
+                                <view className="status-pill__logo">
+                                  <svg
+                                    className="status-pill__logo-svg"
+                                    content={backendLogoSvg(connection.kind)}
+                                  />
+                                </view>
+                              ) : null}
                               <view className="status-pill__dot" />
                               <text className="status-pill__text">{headerStatusText}</text>
                             </view>

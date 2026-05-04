@@ -74,7 +74,7 @@
 }
 
 .status-pill {
-  min-width: 122px;
+  min-width: 148px;
   height: 34px;
   padding: 0 14px;
   border-radius: 999px;
@@ -103,6 +103,21 @@
   border-color: rgba(135, 126, 114, 0.18);
 }
 
+.status-pill__logo {
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  display: flex;
+  /* Codex blossom uses currentColor; OpenCode mark hard-codes its own fills. */
+  color: #252721;
+}
+
+.status-pill__logo-svg {
+  width: 14px;
+  height: 14px;
+}
+
 .status-pill__dot {
   width: 7px;
   height: 7px;
@@ -126,6 +141,7 @@
   color: #4d5148;
   font-size: 13px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .icon-button {
@@ -317,6 +333,10 @@
   box-shadow: 0 1px 4px rgba(36, 38, 33, 0.12);
 }
 
+.connection-kind__pill--disabled {
+  opacity: 0.45;
+}
+
 .connection-kind__label {
   color: #53564e;
   font-size: 13px;
@@ -325,6 +345,14 @@
 
 .connection-kind__pill--active .connection-kind__label {
   color: #22241f;
+}
+
+.connection-kind__hint {
+  margin-top: 6px;
+  color: #86755b;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
 }
 
 .connection-secure-row {
