@@ -234,6 +234,8 @@ export function App() {
   const [agentsCatalog, setAgentsCatalog] = useState<BackendAgentInfo[]>([])
   const [providerDefaults, setProviderDefaults] = useState<Record<string, string>>({})
   const [selection, setSelection] = useState<ChatSelection>(() => ({ ...FALLBACK_SELECTION }))
+  // Gates the composer until a real selection has been seeded — without it the first send on a fresh new-session would carry FALLBACK_SELECTION (breaks Codex which has no `anthropic` provider).
+  const [selectionReady, setSelectionReady] = useState(false)
   const [pickerKind, setPickerKind] = useState<PickerKind>(null)
   const [initialScrollIndex, setInitialScrollIndex] = useState<number | null>(null)
   const [pendingDirectory, setPendingDirectory] = useState<string>('')
@@ -366,6 +368,7 @@ export function App() {
             variant: null,
           })
         }
+        setSelectionReady(true)
       }
       setLoading(false)
       return
@@ -425,11 +428,14 @@ export function App() {
       // messages, adopt their provider/model/agent/variant as the current
       // selection. Gated on storageResolvedRef so a user's saved-but-unsent
       // pick always wins over re-inferring from older assistant messages.
+      // Only commit selectionInitializedRef when inference actually yields
+      // a selection — otherwise let the catalog-default branch take over.
       if (storageResolvedRef.current && !selectionInitializedRef.current) {
-        selectionInitializedRef.current = true
         const inferred = inferSelectionFromBackendMessages(result)
         if (inferred) {
+          selectionInitializedRef.current = true
           applySelection(inferred)
+          setSelectionReady(true)
         }
       }
     } catch (err) {
@@ -465,11 +471,19 @@ export function App() {
       'background only'
       try {
         const stored = await loadStoredSelection(sessionId)
-        if (stored) {
+        // Treat stored selections as ready only when both providerID and
+        // modelID survived validation — partial blobs would otherwise leave
+        // the model fields at the hardcoded fallback and skip catalog seeding.
+        if (stored && typeof stored.providerID === 'string' && typeof stored.modelID === 'string') {
           // setSelection directly (not applySelection) — don't write back
           // to storage on initial hydration, the data came from there.
           setSelection(prev => ({ ...prev, ...stored }))
           selectionInitializedRef.current = true
+          setSelectionReady(true)
+        } else if (stored) {
+          // Partial blob — still apply the safe fields, but let the catalog
+          // default seed the missing provider/model.
+          setSelection(prev => ({ ...prev, ...stored }))
         }
       } catch {
         // Ignore — treat as "no stored selection".
@@ -547,7 +561,6 @@ export function App() {
         // defaults (first provider's default model + first agent if any).
         // Still gated on storage lookup so a stored pick wins.
         if (storageResolvedRef.current && !selectionInitializedRef.current) {
-          selectionInitializedRef.current = true
           const firstAgent = agentsRes.find(a => a.name === 'build') ?? agentsRes[0]
           const providerIDs = Object.keys(providersRes.defaults)
           const firstProviderID = providerIDs[0] ?? providersRes.providers[0]?.id
@@ -556,6 +569,7 @@ export function App() {
               ?? providersRes.providers.find(p => p.id === firstProviderID)?.models[0]?.id
             : undefined
           if (firstProviderID && firstModelID) {
+            selectionInitializedRef.current = true
             applySelection({
               // Empty agent string when capability is off — chat App treats
               // empty as "no agent" and the prompt payload omits the field.
@@ -564,10 +578,21 @@ export function App() {
               modelID: firstModelID,
               variant: null,
             })
+            setSelectionReady(true)
           }
         }
-      } catch {
-        // Silent — keep previous selection; pickers will show empty list.
+      } catch (err) {
+        if (cancelled) return
+        // Storage hydration may already have flipped the ref — in that case
+        // catalog failure is non-fatal (selection stands; pickers will be
+        // empty until reconnect). Only surface when the user is actually
+        // stuck without a selection to send with.
+        if (!selectionInitializedRef.current) {
+          const message = err instanceof Error && err.message.trim().length > 0
+            ? `Failed to load model catalog: ${err.message}`
+            : 'Failed to load model catalog.'
+          setError(message)
+        }
       }
     })()
     return () => {
@@ -586,6 +611,10 @@ export function App() {
     // Ref guard avoids stale-closure re-entry when the memoized child handler
     // holds an older `onSend` reference.
     if (sendingRef.current) return
+    // Defense-in-depth — ChatInput already disables the send button until
+    // selection seeds, but guard the parent too in case a future caller
+    // reaches this without going through the button.
+    if (!selectionReady) return
 
     const buildOptimisticUserMessage = (boundSessionId: string): BackendMessage => {
       const seq = ++msgSeqRef.current
@@ -686,6 +715,7 @@ export function App() {
     scrollListToBottom,
     updateSending,
     selection,
+    selectionReady,
     isNewSession,
     pendingDirectory,
   ])
@@ -714,7 +744,12 @@ export function App() {
   const hasFlatCatalog = providersCatalog.length <= 1
 
   const agentLabel = deriveAgentLabel(selection)
-  const modelLabel = deriveModelLabel(selection, providersCatalog)
+  // Until the selection has been seeded we don't have a real model id to
+  // show — rendering the FALLBACK_SELECTION model name would mislead the user
+  // and on Codex it doesn't exist in the catalog at all.
+  const modelLabel = selectionReady
+    ? deriveModelLabel(selection, providersCatalog)
+    : 'Loading…'
   const effortLabel = deriveEffortLabel(selection)
 
   const agentOptions: PickerOption[] = agentsCatalog.map(a => ({
@@ -949,7 +984,7 @@ export function App() {
 
         <ChatInput
           onSend={handleSend}
-          disabled={sending}
+          disabled={sending || !selectionReady}
           selection={chatInputSelection}
           variantAvailable={variantAvailable}
           agentPickerEnabled={agentPickerEnabled}
