@@ -453,7 +453,25 @@ describe('createCodexMapper / mapServerRequest', () => {
     const event = mapper.mapServerRequest(
       fakeRequest('item/commandExecution/requestApproval', { availableDecisions: ['accept'] }, 12),
     )
+    // JSON.stringify(12) === "12" — number ids stay unquoted in the key.
     expect(event!.approvalID).toBe('12')
+  })
+
+  it('preserves number-vs-string distinction in approvalID', () => {
+    // Regression: a previous version used `String(req.id)`, which collapsed
+    // numeric `1` and string `'1'` to the same key. JSON-RPC 2.0 allows
+    // mixed id types, so two distinct in-flight server requests could
+    // overwrite each other in the adapter's pendingApprovals map.
+    const mapper = makeMapper()
+    const numEvent = mapper.mapServerRequest(
+      fakeRequest('item/commandExecution/requestApproval', {}, 1),
+    )
+    const strEvent = mapper.mapServerRequest(
+      fakeRequest('item/commandExecution/requestApproval', {}, '1'),
+    )
+    expect(numEvent!.approvalID).toBe('1')
+    expect(strEvent!.approvalID).toBe('"1"')
+    expect(numEvent!.approvalID).not.toBe(strEvent!.approvalID)
   })
 })
 
