@@ -427,12 +427,25 @@ enum OpenCodeSchemeParser {
 // MARK: - Navigation Coordinator
 
 /// Listens for navigation.open / navigation.close bridge calls and manages the navigation stack.
-final class OpenCodeNavigationCoordinator {
+///
+/// Also acts as `UIGestureRecognizerDelegate` for the navigation controller's
+/// `interactivePopGestureRecognizer`. UIKit disables that gesture by default
+/// when the navigation bar is hidden, which would block left-edge swipe-back
+/// on pushed Lynx pages (chat, etc.). Re-enabling via a delegate that gates
+/// on `viewControllers.count > 1` keeps the gesture working without firing
+/// on the root view controller.
+final class OpenCodeNavigationCoordinator: NSObject, UIGestureRecognizerDelegate {
     weak var navigationController: UINavigationController?
 
     init(navigationController: UINavigationController) {
         self.navigationController = navigationController
+        super.init()
         setupObservers()
+        // Force view load so `interactivePopGestureRecognizer` is materialized
+        // before we install the delegate. SwiftUI hasn't presented the nav
+        // controller yet at this point, so the recognizer may otherwise be nil.
+        _ = navigationController.view
+        navigationController.interactivePopGestureRecognizer?.delegate = self
     }
 
     private func setupObservers() {
@@ -442,6 +455,11 @@ final class OpenCodeNavigationCoordinator {
         NotificationCenter.default.addObserver(
             self, selector: #selector(handleClose(_:)),
             name: .openCodeNavigationClose, object: nil)
+    }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let nav = navigationController else { return false }
+        return nav.viewControllers.count > 1
     }
 
     @objc private func handleOpen(_ notification: Notification) {
