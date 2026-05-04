@@ -173,6 +173,49 @@ xcodebuild test \
   '-only-testing:OpenCodeLynxUITests/OpenCodeLynxUITests/testMainFlowOpensChatWithSavedConnectionAndRouteParams'
 ```
 
+### `pnpm run:ios-device` — deploy to a real iPhone
+
+Frequent on-device dev iteration uses `pnpm run:ios-device`, which builds Lynx
+bundles, signs the Xcode app for a real device, installs via `devicectl`,
+and launches.
+
+One-time setup:
+
+1. Open Xcode → **Settings → Accounts** and sign in with the Apple ID that
+   owns your `IOS_DEVELOPMENT_TEAM` (paid or free both work; free has 7-day
+   resigning, max 3 sideloaded apps, 100 device registrations / year).
+2. Connect the device via USB, trust this Mac on the device, and optionally
+   enable **Window → Devices and Simulators → Connect via network** for
+   wireless redeploys.
+3. Copy `.env.ios.local.example` to `.env.ios.local` and fill in:
+   ```sh
+   cp .env.ios.local.example .env.ios.local
+   $EDITOR .env.ios.local
+   ```
+   - `IOS_DEVICE_UDID` — get from `xcrun xctrace list devices`
+   - `IOS_DEVELOPMENT_TEAM` — 10-char Team ID (the OU= field of the
+     development certificate, **not** the cert UID printed by
+     `security find-identity`)
+
+Day-to-day:
+
+```sh
+pnpm run:ios-device
+```
+
+Optional speed-ups for tight iteration loops:
+
+```sh
+IOS_SKIP_POD_INSTALL=1 pnpm run:ios-device     # skip pod install
+IOS_SKIP_LYNX_BUILD=1 pnpm run:ios-device      # native-only iteration
+```
+
+If `xcodebuild` complains that no provisioning profile matches, the most
+common cause is the Apple ID is not signed in to Xcode (the CLI cannot
+inject accounts; it only signs). The first build also auto-registers the
+device under your team — that requires `-allowProvisioningUpdates`, which
+the script already sets.
+
 ### `pnpm run:ios` strict launch verification
 
 This repository wraps the iOS build with a strict verification step in `scripts/run-ios-strict.mjs`.

@@ -71,6 +71,28 @@ post_install do |installer|
     File.write(path, patched)
   end
 
+  # Per-developer signing injection. ios/Local.xcconfig is gitignored and
+  # produced by `pnpm run:ios-device` (or hand-written). When present, its
+  # DEVELOPMENT_TEAM / CODE_SIGN_STYLE settings are appended to the
+  # Pods-OpenCodeLynx*.xcconfig files so Xcode UI builds pick them up
+  # without writing the team back into project.pbxproj.
+  local_xcconfig = File.join(__dir__, 'Local.xcconfig')
+  if File.exist?(local_xcconfig)
+    local_lines = File.readlines(local_xcconfig).reject { |l| l.strip.empty? || l.strip.start_with?('//') }
+    if local_lines.any?
+      target_xcconfigs = Dir.glob(File.join(__dir__, 'Pods', 'Target Support Files', 'Pods-OpenCodeLynx*', '*.xcconfig'))
+      marker = '// >>> opencode_lynx local signing'
+      end_marker = '// <<< opencode_lynx local signing'
+      target_xcconfigs.each do |path|
+        content = File.read(path)
+        # Strip any prior injection so we never double-append.
+        content = content.sub(/\n#{Regexp.escape(marker)}.*?#{Regexp.escape(end_marker)}\n?/m, '')
+        injection = ["\n#{marker}", *local_lines.map(&:rstrip), end_marker, ''].join("\n")
+        File.write(path, content + injection)
+      end
+    end
+  end
+
   installer.generated_projects.each do |project|
     project.save
   end

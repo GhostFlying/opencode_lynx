@@ -48,6 +48,7 @@
     "gate:daily-full": "scripts/local-gate --mode full --platform both",
     "run:android": "rspeedy build && node scripts/copy-bundles.mjs && ./android/gradlew -p android :app:installDebug && adb shell am start -n com.opencode.lynx/.SplashActivity",
     "run:ios": "node scripts/run-ios-strict.mjs",
+    "run:ios-device": "node scripts/run-ios-device.mjs",
     "codex:refresh-bindings": "codex app-server generate-ts --out scripts/codex-bindings/ts && codex app-server generate-json-schema --out scripts/codex-bindings/schema",
     "mock:ws-echo": "node scripts/mock-ws-echo.mjs",
     "mock:codex-server": "node scripts/mock-codex-server.mjs"

@@ -44,6 +44,11 @@ ios/Pods/
 **/xcuserdata/
 *.xcuserstate
 
+# iOS — local-only signing config (DEVELOPMENT_TEAM etc.)
+ios/Local.xcconfig
+.env.ios.local
+!.env.ios.local.example
+
 # Generated Lynx bundles (produced by scripts/copy-bundles.mjs)
 ios/LynxResources/*.lynx.bundle
 ios/LynxResources/static/
@@ -63,3 +68,6 @@ build/
 # Ruby / Bundler
 vendor/bundle/
 .bundle/
+
+# Codex backend rollout coordination (process artifacts, not project code)
+.codex-rollout/
