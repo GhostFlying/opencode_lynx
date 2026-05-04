@@ -129,12 +129,13 @@ typealias BridgeCompletion = (_ code: Int, _ msg: String?, _ data: NSDictionary?
             return
         }
 
-        // Create event dispatcher using the LynxContext for sendGlobalEvent
+        // Create event dispatcher using the LynxContext for sendGlobalEvent.
+        // `LynxView` conforms to `NativeNetworkSseEventDispatching` via the
+        // extension at the top of this file, so the cast that was here before
+        // was unconditional — pass lynxView directly.
         let dispatcher: NativeNetworkSseEventDispatcher?
-        if let context = lynxContext,
-           let lynxView = context.getLynxView(),
-           let dispatching = lynxView as? NativeNetworkSseEventDispatching {
-            dispatcher = NativeNetworkSseEventDispatcher(target: dispatching)
+        if let context = lynxContext, let lynxView = context.getLynxView() {
+            dispatcher = NativeNetworkSseEventDispatcher(target: lynxView)
         } else {
             dispatcher = nil
         }
@@ -192,14 +193,14 @@ typealias BridgeCompletion = (_ code: Int, _ msg: String?, _ data: NSDictionary?
             return
         }
 
-        guard let context = lynxContext,
-              let lynxView = context.getLynxView(),
-              let dispatching = lynxView as? NativeBackendChannelEventDispatching else {
+        guard let context = lynxContext, let lynxView = context.getLynxView() else {
             completion(Self.codeFailed, "Lynx view unavailable for backend.channel.open", ["error_code": "bridge_unavailable"])
             return
         }
 
-        let dispatcher = NativeBackendChannelEventDispatcher(target: dispatching)
+        // `LynxView` conforms to `NativeBackendChannelEventDispatching` via
+        // the extension at the top of this file — pass it directly.
+        let dispatcher = NativeBackendChannelEventDispatcher(target: lynxView)
         let headers = (params["headers"] as? [AnyHashable: Any] ?? [:]).reduce(into: [String: String]()) { acc, kv in
             guard let key = kv.key as? String else { return }
             let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
