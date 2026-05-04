@@ -435,8 +435,11 @@ export function App() {
       // messages, adopt their provider/model/agent/variant as the current
       // selection. Gated on storageResolvedRef so a user's saved-but-unsent
       // pick always wins over re-inferring from older assistant messages.
-      // Only commit selectionInitializedRef when inference actually yields
-      // a selection — otherwise let the catalog-default branch take over.
+      // Only flip `selectionInitializedRef` once we actually applied a
+      // selection — otherwise backends whose history can't surface
+      // provider/model (e.g. Codex) would lock in FALLBACK_SELECTION and
+      // block the catalog-defaults branch below from filling in the real
+      // backend default.
       if (storageResolvedRef.current && !selectionInitializedRef.current) {
         const inferred = inferSelectionFromBackendMessages(result)
         if (inferred) {
