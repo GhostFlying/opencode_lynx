@@ -445,8 +445,7 @@
   box-sizing: border-box;
 }
 
-.connected-shell__content--sessions,
-.connected-shell__content--settings {
+.connected-shell__content--sessions {
   flex: 1;
   min-height: 0;
 }

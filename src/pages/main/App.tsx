@@ -626,11 +626,14 @@ export function App({
               <view className="connected-shell">
                 <view className="connected-shell__content">
                   {/*
-                    Both tab views stay mounted; only `display` toggles. Switching
-                    tabs would otherwise unmount the inactive subtree, which made
-                    `SessionListView` reload on every return (it refetches the
-                    session list and re-subscribes to backend events on mount,
-                    and `SettingsView` would lose any in-progress form input).
+                    Sessions stays mounted (display toggle only) so switching
+                    tabs doesn't refetch the session list or churn the backend
+                    subscription/WebSocket. Settings is rendered conditionally:
+                    its KeyboardAwareResponder measures scroll-view geometry
+                    once on mount, and that measurement is wrong if the parent
+                    is `display: none` at mount time. ConnectionForm is fully
+                    controlled by App.tsx state, so remounting SettingsView
+                    does not lose user input.
                   */}
                   <view
                     className="connected-shell__content--sessions"
@@ -668,13 +671,7 @@ export function App({
                     />
                   </view>
 
-                  <view
-                    className="connected-shell__content--settings"
-                    style={{
-                      display: activeTab === 'settings' ? 'flex' : 'none',
-                      flexDirection: 'column',
-                    }}
-                  >
+                  {activeTab === 'settings' ? (
                     <SettingsView
                       connection={connection}
                       status={connectionStatus}
@@ -696,7 +693,7 @@ export function App({
                       }
                       contentInsetBottom={scrollContentInsetBottom}
                     />
-                  </view>
+                  ) : null}
                 </view>
 
                 <view className="tabbar-float" style={tabbarFloatStyle}>
