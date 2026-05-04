@@ -546,6 +546,97 @@ describe('Chat App new-session flow', () => {
     result.unmount()
   })
 
+  // FIX-5: persisted chat selection JSON must be validated before use. A
+  // malformed blob, missing fields, or wrong types must fall back to defaults
+  // without throwing or producing a half-typed selection in state.
+  it('falls back to defaults when stored selection is malformed JSON', async () => {
+    setRouteParams({
+      sessionId: 'session-fix5-bad-json',
+      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    })
+    storageGetMock.mockResolvedValueOnce('{not valid json')
+    const harness = createFakeChatClient()
+    createBackendClientMock.mockReturnValue(harness.client)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    await waitFor(() => {
+      expect(harness.client.sessions.messages).toHaveBeenCalledWith('session-fix5-bad-json')
+    })
+    // App must render normally — no throw, no error state from JSON parse.
+    expect(result.container.querySelector('.chat-page')).not.toBeNull()
+    result.unmount()
+  })
+
+  it('falls back to defaults when stored selection has wrong field types', async () => {
+    setRouteParams({
+      sessionId: 'session-fix5-wrong-types',
+      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    })
+    // agent should be string; providerID number is invalid; variant must be string|null.
+    storageGetMock.mockResolvedValueOnce(JSON.stringify({
+      agent: 123,
+      providerID: { not: 'a string' },
+      modelID: false,
+      variant: 42,
+    }))
+    const harness = createFakeChatClient()
+    createBackendClientMock.mockReturnValue(harness.client)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    await waitFor(() => {
+      expect(harness.client.catalog!.providers).toHaveBeenCalled()
+    })
+    // After catalog seeds defaults, model label should reflect a real catalog
+    // model (not stringified garbage from the malformed blob).
+    const composer = result.container.querySelector('.composer-stub')
+    expect(composer?.className).not.toContain('composer-stub--model-[object Object]')
+    expect(composer?.className).not.toContain('composer-stub--model-false')
+    result.unmount()
+  })
+
+  it('accepts a well-formed stored selection with missing optional fields', async () => {
+    setRouteParams({
+      sessionId: 'session-fix5-partial',
+      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    })
+    // Only `variant` set — must be allowed (Partial<ChatSelection> shape).
+    storageGetMock.mockResolvedValueOnce(JSON.stringify({ variant: null }))
+    const harness = createFakeChatClient()
+    createBackendClientMock.mockReturnValue(harness.client)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    await waitFor(() => {
+      expect(harness.client.sessions.messages).toHaveBeenCalledWith('session-fix5-partial')
+    })
+    expect(result.container.querySelector('.chat-page')).not.toBeNull()
+    result.unmount()
+  })
+
+  it('rejects a stored selection that is an array (not an object)', async () => {
+    setRouteParams({
+      sessionId: 'session-fix5-array',
+      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    })
+    storageGetMock.mockResolvedValueOnce(JSON.stringify(['agent', 'providerID']))
+    const harness = createFakeChatClient()
+    createBackendClientMock.mockReturnValue(harness.client)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    await waitFor(() => {
+      expect(harness.client.sessions.messages).toHaveBeenCalledWith('session-fix5-array')
+    })
+    expect(result.container.querySelector('.chat-page')).not.toBeNull()
+    result.unmount()
+  })
+
   it('renders the existing-session list path when sessionId is provided', async () => {
     setRouteParams({
       sessionId: 'session-existing-1',
