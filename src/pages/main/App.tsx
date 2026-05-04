@@ -625,7 +625,20 @@ export function App({
             {view === 'connected' && clientRef.current ? (
               <view className="connected-shell">
                 <view className="connected-shell__content">
-                  {activeTab === 'sessions' ? (
+                  {/*
+                    Both tab views stay mounted; only `display` toggles. Switching
+                    tabs would otherwise unmount the inactive subtree, which made
+                    `SessionListView` reload on every return (it refetches the
+                    session list and re-subscribes to backend events on mount,
+                    and `SettingsView` would lose any in-progress form input).
+                  */}
+                  <view
+                    className="connected-shell__content--sessions"
+                    style={{
+                      display: activeTab === 'sessions' ? 'flex' : 'none',
+                      flexDirection: 'column',
+                    }}
+                  >
                     <SessionListView
                       client={clientRef.current}
                       connection={connection}
@@ -653,7 +666,15 @@ export function App({
                       }
                       contentInsetBottom={scrollContentInsetBottom}
                     />
-                  ) : (
+                  </view>
+
+                  <view
+                    className="connected-shell__content--settings"
+                    style={{
+                      display: activeTab === 'settings' ? 'flex' : 'none',
+                      flexDirection: 'column',
+                    }}
+                  >
                     <SettingsView
                       connection={connection}
                       status={connectionStatus}
@@ -675,7 +696,7 @@ export function App({
                       }
                       contentInsetBottom={scrollContentInsetBottom}
                     />
-                  )}
+                  </view>
                 </view>
 
                 <view className="tabbar-float" style={tabbarFloatStyle}>
