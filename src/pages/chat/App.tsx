@@ -562,12 +562,30 @@ export function App() {
         // Still gated on storage lookup so a stored pick wins.
         if (storageResolvedRef.current && !selectionInitializedRef.current) {
           const firstAgent = agentsRes.find(a => a.name === 'build') ?? agentsRes[0]
-          const providerIDs = Object.keys(providersRes.defaults)
-          const firstProviderID = providerIDs[0] ?? providersRes.providers[0]?.id
-          const firstModelID = firstProviderID
-            ? providersRes.defaults[firstProviderID]
-              ?? providersRes.providers.find(p => p.id === firstProviderID)?.models[0]?.id
-            : undefined
+          // Walk providers in catalog order: prefer the first one that has a
+          // recommended default, then fall back to the first one that has any
+          // model at all. The previous logic pinned to `providers[0]` and
+          // would silently no-op if that provider had no models — leaving the
+          // composer disabled forever even though other providers could send.
+          let firstProviderID: string | undefined
+          let firstModelID: string | undefined
+          for (const provider of providersRes.providers) {
+            const recommended = providersRes.defaults[provider.id]
+            if (recommended) {
+              firstProviderID = provider.id
+              firstModelID = recommended
+              break
+            }
+          }
+          if (!firstModelID) {
+            for (const provider of providersRes.providers) {
+              if (provider.models.length > 0) {
+                firstProviderID = provider.id
+                firstModelID = provider.models[0].id
+                break
+              }
+            }
+          }
           if (firstProviderID && firstModelID) {
             selectionInitializedRef.current = true
             applySelection({
@@ -829,6 +847,12 @@ export function App() {
       saveStoredSelection(sessionId, next)
       return next
     })
+    // An explicit user pick is, by definition, a real selection — flip the
+    // gate so the composer unblocks even when catalog default seeding
+    // couldn't pick a sensible default. Mirror selectionInitializedRef so
+    // any later auto-seed branch defers to the user's choice.
+    selectionInitializedRef.current = true
+    setSelectionReady(true)
     setPickerKind(null)
   }, [providersCatalog, sessionId])
 
