@@ -284,6 +284,45 @@ describe('createCodexProtocolClient — timeouts', () => {
 
     await client.close()
   })
+
+  // FIX-1 regression: a request queued before handshake completes must NOT
+  // be flushed onto the wire if its timeout already fired. Otherwise the
+  // server sees a frame with a unique id whose response has no listener.
+  it('does not flush a queued request whose timeout fired before handshake completed', async () => {
+    const factory = createFakeChannelFactory()
+    const client = createCodexProtocolClient({
+      url: 'ws://test',
+      openChannel: factory.open,
+      clientInfo: STD_CLIENT_INFO,
+    })
+
+    // Issue request with a very short timeout BEFORE we resolve the handshake.
+    const queued = client.request('thread/list', {}, { timeoutMs: 20 })
+
+    // Wait for the channel to open and `initialize` to be sent. Don't reply
+    // yet — we want the request to sit in the pre-init queue until timeout.
+    await waitFor(() => factory.channels.length === 1, 'channel opened')
+    const ch = factory.channels[0]!
+    await waitFor(() => ch.sent.length >= 1, 'initialize sent')
+    expect(ch.sent.length).toBe(1)
+
+    // Let the timeout fire while we still haven't resolved initialize.
+    await expect(queued).rejects.toThrow(/timeout.*thread\/list/)
+    const sentBeforeHandshake = ch.sent.length
+
+    // NOW complete the handshake. Flush should skip the cancelled entry.
+    ch.receive({ jsonrpc: '2.0', id: 1, result: {} })
+    await waitFor(() => ch.sent.length >= sentBeforeHandshake + 1, 'initialized sent')
+
+    // After handshake the only new frame should be `initialized` — the
+    // previously-timed-out thread/list request must NOT appear on the wire.
+    const allSent = ch.sent.slice()
+    expect(allSent.find(f => f.method === 'thread/list')).toBeUndefined()
+    // Also assert the channel saw exactly the two handshake frames.
+    expect(allSent.map(f => f.method)).toEqual(['initialize', 'initialized'])
+
+    await client.close()
+  })
 })
 
 describe('createCodexProtocolClient — server-initiated requests', () => {
