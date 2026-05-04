@@ -607,10 +607,22 @@ export function App() {
     }
 
     const buildPayload = (): BackendPromptInput => ({
-      model: {
-        providerID: selection.providerID,
-        modelID: selection.modelID,
-      },
+      // Omit `model` until the selection has been seeded — either from
+      // storage or from `catalog.providers()` defaults. Otherwise a fresh
+      // Codex connection that sends before the catalog resolves would ship
+      // FALLBACK_SELECTION's OpenCode-shaped model id (anthropic /
+      // claude-sonnet-4-...) which Codex would reject. Once seeded, the
+      // payload always carries the selection — no behavioural change for
+      // OpenCode, since its first-paint catalog typically resolves before
+      // the user can hit send.
+      ...(selectionInitializedRef.current
+        ? {
+            model: {
+              providerID: selection.providerID,
+              modelID: selection.modelID,
+            },
+          }
+        : {}),
       // Only include `agent` when the selection actually has one. The Codex
       // adapter ignores it but stay hygienic across backends.
       ...(selection.agent ? { agent: selection.agent } : {}),
