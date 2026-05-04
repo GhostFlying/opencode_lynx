@@ -352,11 +352,15 @@ Recommended deployment modes:
 Codex event mapping should normalize:
 
 - `thread/started` -> `session.updated`
+- `thread/status/changed` -> `session.updated`
+- `thread/name/updated` -> `session.updated` (Codex auto-summarizes threads asynchronously and pushes the new title here; without this mapping the UI keeps the long first-message preview as the title)
 - `turn/started` -> `turn.started`
 - `turn/completed` -> `turn.completed`
 - `item/agentMessage/delta` -> `message.delta`
 - item lifecycle notifications for command/file/MCP work -> `tool.started` / `tool.completed`
 - approval requests -> `approval.requested`
+
+When mapping `Thread` to a session summary, prefer `Thread.name`. The fallback to `Thread.preview` (the first user message, often unbounded) must truncate to first line + a small character cap so list rows / chat headers stay readable until the auto-summary lands.
 
 ### ClaudeAdapter
 

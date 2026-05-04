@@ -235,6 +235,51 @@ describe('createCodexBackendAdapter / sessions.list', () => {
     const second = summaries[1]!
     expect(second.title).toBe('fallback preview')
   })
+
+  it('truncates long preview fallback to first line + 80-char cap with ellipsis', async () => {
+    const longLine =
+      'This is the first user message which the model has not yet had a chance to summarize so it shows up verbatim'
+    const multiline = `first line of the preview\nthen a second line that should not appear`
+    const { client } = makeAdapter({
+      requestHandler: method => {
+        if (method !== 'thread/list') throw new Error(`unexpected ${method}`)
+        return {
+          data: [
+            {
+              id: 'thread-long',
+              name: null,
+              preview: longLine,
+              status: 'idle',
+              updatedAt: 0,
+              cwd: '/',
+              modelProvider: 'openai',
+              source: 'cli',
+              ephemeral: false,
+            },
+            {
+              id: 'thread-multiline',
+              name: null,
+              preview: multiline,
+              status: 'idle',
+              updatedAt: 0,
+              cwd: '/',
+              modelProvider: 'openai',
+              source: 'cli',
+              ephemeral: false,
+            },
+          ],
+          nextCursor: null,
+        }
+      },
+    })
+    const summaries = await client.sessions.list()
+    const long = summaries[0]!
+    expect(long.title).toBeDefined()
+    expect(long.title!.length).toBeLessThanOrEqual(80)
+    expect(long.title!.endsWith('…')).toBe(true)
+    const multi = summaries[1]!
+    expect(multi.title).toBe('first line of the preview')
+  })
 })
 
 describe('createCodexBackendAdapter / sessions.create', () => {
