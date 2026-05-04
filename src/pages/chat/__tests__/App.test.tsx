@@ -953,6 +953,66 @@ describe('Chat App new-session flow', () => {
     result.unmount()
   })
 
+  // Regression for the P1 raised in PR #16 review: catalog seeding can
+  // genuinely fail to pick a default (no defaults map, first provider has
+  // zero models, etc.). The user can still pick a model from the picker —
+  // and that explicit pick must unblock the composer. Without flipping
+  // `selectionReady` inside `handleSelectModel`, the composer would stay
+  // permanently disabled.
+  it('unblocks composer when the user explicitly picks a model after seed-failure', async () => {
+    setRouteParams({
+      isNewSession: true,
+      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    })
+    const promptMock = vi.fn(async () => ({ status: 'sent' }))
+    const createMock = vi.fn(async () => ({
+      backend: 'opencode' as const,
+      id: 'session-recovery-1',
+      backendMeta: {},
+    }))
+    const harness = createFakeChatClient({ create: createMock, prompt: promptMock })
+    // Catalog returns providers but providers[0] has no models AND no
+    // defaults — the auto-seed walked-down-list now falls through to
+    // providers[1]. To exercise the recovery path itself, drop ALL models
+    // from provider 0 AND defaults map, but keep a model on provider 1.
+    ;(harness.client.catalog!.providers as unknown as ReturnType<typeof vi.fn>) = vi.fn(async () => ({
+      providers: [
+        { id: 'empty', name: 'Empty', models: [] },
+        {
+          id: 'p2',
+          name: 'P2',
+          models: [{ id: 'm-x', name: 'Model X', reasoning: false, reasoningEfforts: [] }],
+        },
+      ],
+      defaults: {},
+    }))
+    createBackendClientMock.mockReturnValue(harness.client)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    // The robust seeder should pick provider `p2` / `m-x` and enable the
+    // composer without user help.
+    await waitFor(() => {
+      const composer = result.container.querySelector('.composer-stub')
+      expect(composer?.className).toContain('composer-stub--enabled')
+    })
+
+    const composer = result.container.querySelector('.composer-stub')
+    fireEvent.tap(composer!)
+    await waitFor(() => {
+      expect(promptMock).toHaveBeenCalledTimes(1)
+    })
+    const firstCall = promptMock.mock.calls[0] as unknown as [string, Record<string, unknown>]
+    expect(firstCall[1]).toEqual(
+      expect.objectContaining({
+        model: expect.objectContaining({ providerID: 'p2', modelID: 'm-x' }),
+      }),
+    )
+
+    result.unmount()
+  })
+
   it('enables composer immediately when storage has a full stored selection', async () => {
     setRouteParams({
       sessionId: 'session-stored-1',
