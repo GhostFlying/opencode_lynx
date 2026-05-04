@@ -353,20 +353,29 @@ describe('codex backend integration with in-process mock', () => {
     )
 
     const types = events.map((e) => e.type)
-    // Sequence (per fixture happy-path):
-    //   thread/started -> session.updated
-    //   turn/started -> turn.started
-    //   item/started (agentMessage) -> message.delta (initial empty)
-    //   item/agentMessage/delta x3 -> message.delta x3
-    //   item/completed (agentMessage) -> message.updated
-    //   turn/completed -> turn.completed
+    // Sequence (per fixture happy-path). Each notification that mutates
+    // the in-adapter message store also synthesizes a `message.updated`
+    // event so the chat refresh-on-event path picks up the new snapshot —
+    // those store sentinels are interleaved with the mapper's primary
+    // events:
+    //   thread/started      -> session.updated
+    //   turn/started        -> turn.started
+    //   item/started agent  -> message.delta (initial empty) + message.updated (store)
+    //   agentMessage/delta  -> message.delta + message.updated x3
+    //   item/completed      -> message.updated (mapper) + message.updated (store)
+    //   turn/completed      -> turn.completed
     expect(types).toEqual([
       'session.updated',
       'turn.started',
       'message.delta',
+      'message.updated',
       'message.delta',
+      'message.updated',
       'message.delta',
+      'message.updated',
       'message.delta',
+      'message.updated',
+      'message.updated',
       'message.updated',
       'turn.completed',
     ])

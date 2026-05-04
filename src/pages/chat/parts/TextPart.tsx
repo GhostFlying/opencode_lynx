@@ -14,6 +14,9 @@ export function TextPartView({ part, role }: TextPartProps) {
     return null
   }
 
-  const className = role === 'user' ? 'msg-text--user' : 'msg-text--assistant'
+  let className: string
+  if (role === 'user') className = 'msg-text--user'
+  else if (role === 'error') className = 'msg-text--error'
+  else className = 'msg-text--assistant'
   return <text className={className}>{text}</text>
 }
