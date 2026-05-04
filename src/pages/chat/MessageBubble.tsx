@@ -12,6 +12,11 @@ export interface MessageBubbleProps {
   role: string
   parts: ReadonlyArray<unknown>
   createdAt?: string
+  /** Marker from BackendMessage.backendMeta — if `kind === 'turnError'`,
+   *  render the bubble with a distinct error style instead of the
+   *  generic assistant variant. Codex's adapter sets this when folding
+   *  a terminal `error` notification into the in-adapter store. */
+  kind?: string
 }
 
 function formatTimestamp(iso: string | undefined): string {
@@ -31,7 +36,7 @@ function formatTimestamp(iso: string | undefined): string {
   return `${mo}-${d} ${hh}:${mm}`
 }
 
-function renderPart(part: unknown, index: number, role: string) {
+function renderPart(part: unknown, index: number, role: string, isError: boolean) {
   const p = part as { type?: string }
   if (!p || typeof p.type !== 'string') {
     return null
@@ -39,7 +44,13 @@ function renderPart(part: unknown, index: number, role: string) {
 
   switch (p.type) {
     case 'text':
-      return <TextPartView part={p as any} role={role} key={`part-${index}`} />
+      return (
+        <TextPartView
+          part={p as any}
+          role={isError ? 'error' : role}
+          key={`part-${index}`}
+        />
+      )
     case 'tool':
       return <ToolPartView part={p as any} key={`part-${index}`} />
     case 'reasoning':
@@ -55,11 +66,29 @@ function renderPart(part: unknown, index: number, role: string) {
   }
 }
 
-export function MessageBubble({ role, parts, createdAt }: MessageBubbleProps) {
+export function MessageBubble({ role, parts, createdAt, kind }: MessageBubbleProps) {
   const isUser = role === 'user'
-  const rowClass = isUser ? 'msg-row msg-row--user' : 'msg-row msg-row--assistant'
-  const bubbleClass = isUser ? 'msg-bubble msg-bubble--user' : 'msg-bubble msg-bubble--assistant'
-  const roleLabel = isUser ? 'You' : 'Assistant'
+  const isError = kind === 'turnError'
+
+  let rowClass: string
+  let bubbleClass: string
+  let roleLabel: string
+  let roleClass = 'msg-role'
+
+  if (isError) {
+    rowClass = 'msg-row msg-row--system'
+    bubbleClass = 'msg-bubble msg-bubble--error'
+    roleLabel = 'Turn failed'
+    roleClass = 'msg-role msg-role--error'
+  } else if (isUser) {
+    rowClass = 'msg-row msg-row--user'
+    bubbleClass = 'msg-bubble msg-bubble--user'
+    roleLabel = 'You'
+  } else {
+    rowClass = 'msg-row msg-row--assistant'
+    bubbleClass = 'msg-bubble msg-bubble--assistant'
+    roleLabel = 'Assistant'
+  }
 
   const [showTime, setShowTime] = useState(false)
   const toggleTime = useCallback(() => {
@@ -72,9 +101,9 @@ export function MessageBubble({ role, parts, createdAt }: MessageBubbleProps) {
   return (
     <view className={rowClass}>
       {showTime && timeText ? <text className="msg-time">{timeText}</text> : null}
-      <text className="msg-role">{roleLabel}</text>
+      <text className={roleClass}>{roleLabel}</text>
       <view className={bubbleClass} bindtap={toggleTime}>
-        {parts.map((part, index) => renderPart(part, index, role))}
+        {parts.map((part, index) => renderPart(part, index, role, isError))}
       </view>
     </view>
   )

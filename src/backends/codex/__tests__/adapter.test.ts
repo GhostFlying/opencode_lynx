@@ -467,19 +467,130 @@ describe('createCodexBackendAdapter / sessions.messages', () => {
     expect(messages[2]).toMatchObject({ role: 'tool' })
     expect(messages[2]!.parts[0]).toMatchObject({
       type: 'tool',
-      kind: 'commandExecution',
-      command: 'ls',
-      exitCode: 0,
+      tool: 'shell',
+      callID: 'item-3',
+      state: {
+        status: 'completed',
+        input: { command: 'ls', cwd: '/work' },
+        output: 'file.txt',
+        exitCode: 0,
+        durationMs: 12,
+      },
     })
     expect(messages[3]).toMatchObject({ role: 'tool' })
     expect(messages[3]!.parts[0]).toMatchObject({
       type: 'tool',
-      kind: 'fileChange',
-      changes: [{ path: '/x' }],
+      tool: 'edit',
+      callID: 'item-4',
+      state: {
+        status: 'applied',
+        input: { changes: [{ path: '/x' }] },
+      },
     })
     expect(messages[4]).toMatchObject({ role: 'system' })
     expect(messages[4]!.parts[0]).toMatchObject({ type: 'raw' })
     expect(messages[0]!.createdAt).toBe(new Date(1_730_000_010 * 1000).toISOString())
+  })
+
+  it('returns store snapshot on subsequent calls without round-tripping the network', async () => {
+    let calls = 0
+    const { client } = makeAdapter({
+      requestHandler: (method) => {
+        if (method !== 'thread/turns/list') throw new Error(`unexpected ${method}`)
+        calls += 1
+        return { data: [] }
+      },
+    })
+    await client.sessions.messages('thread-1')
+    await client.sessions.messages('thread-1')
+    await client.sessions.messages('thread-1')
+    expect(calls).toBe(1)
+  })
+
+  it('folds streaming notifications into the store and emits message.updated', async () => {
+    const { client, fake } = makeAdapter({
+      requestHandler: (method) => {
+        if (method !== 'thread/turns/list') throw new Error(`unexpected ${method}`)
+        return { data: [] }
+      },
+    })
+
+    // Seed the session by reading messages once (cold path).
+    const initial = await client.sessions.messages('thread-1')
+    expect(initial).toEqual([])
+
+    const events: BackendEvent[] = []
+    const sub = client.events.subscribe({
+      autoStart: true,
+      onEvent: (event) => events.push(event),
+    })
+
+    fake.pushNotification('item/started', {
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      item: { type: 'agentMessage', id: 'msg-1' },
+    })
+    fake.pushNotification('item/agentMessage/delta', {
+      threadId: 'thread-1',
+      itemId: 'msg-1',
+      delta: 'hi',
+    })
+    fake.pushNotification('item/completed', {
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      item: { type: 'agentMessage', id: 'msg-1', text: 'hi' },
+    })
+
+    // Synthesized message.updated for each fold (one per state-changing event).
+    const updates = events.filter(
+      (e) => e.type === 'message.updated' && e.payload.source === 'codex.store',
+    )
+    expect(updates.length).toBeGreaterThanOrEqual(2)
+    expect(updates[0]!.sessionID).toBe('thread-1')
+
+    // Snapshot read should now reflect the streamed content; no more network.
+    const snap = await client.sessions.messages('thread-1')
+    expect(snap).toHaveLength(1)
+    expect(snap[0]!.role).toBe('assistant')
+    expect((snap[0]!.parts[0] as { text: string }).text).toBe('hi')
+
+    sub.stop()
+  })
+
+  it('clears the store on reconnect so the next read re-fetches', async () => {
+    let calls = 0
+    const { client, fake } = makeAdapter({
+      requestHandler: (method) => {
+        if (method !== 'thread/turns/list') throw new Error(`unexpected ${method}`)
+        calls += 1
+        return { data: [] }
+      },
+    })
+    await client.sessions.messages('thread-1')
+    expect(calls).toBe(1)
+    fake.pushState({ status: 'reconnecting', attempt: 1 })
+    await client.sessions.messages('thread-1')
+    expect(calls).toBe(2)
+  })
+
+  it('terminal error notifications surface as a system message via the store', async () => {
+    const { client, fake } = makeAdapter({
+      requestHandler: (method) => {
+        if (method !== 'thread/turns/list') throw new Error(`unexpected ${method}`)
+        return { data: [] }
+      },
+    })
+    await client.sessions.messages('thread-1')
+    fake.pushNotification('error', {
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      willRetry: false,
+      error: { message: 'upstream 503' },
+    })
+    const snap = await client.sessions.messages('thread-1')
+    expect(snap).toHaveLength(1)
+    expect(snap[0]!.role).toBe('system')
+    expect((snap[0]!.parts[0] as { text: string }).text).toBe('upstream 503')
   })
 })
 

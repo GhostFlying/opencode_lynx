@@ -192,6 +192,7 @@ src/
       adapter.ts
       mapper.ts
       protocol.ts
+      store.ts
     claude/
       adapter.ts
       mapper.ts
@@ -494,6 +495,38 @@ connection form selector are merged. Real-codex Gate B validation pending
 - support direct app-server connection first
 - then add SSH bootstrap and discovery
 - normalize approvals and tool-call events
+
+#### Codex adapter ≠ OpenCode adapter (state ownership)
+
+The OpenCode adapter is intentionally stateless: SSE events carry "something
+changed, refetch" hints and the chat UI re-pulls the full session messages
+from the server. That works because the OpenCode REST API exposes a
+single-source-of-truth view that includes in-flight tool calls.
+
+Codex's `app-server` follows the opposite shape. `thread/turns/list` only
+returns *completed* turns. The streaming surface (`item/started`,
+`*/outputDelta`, `item/agentMessage/delta`, `item/completed`) is the only
+authoritative view of an in-flight turn. To match the chat layer's
+existing "refresh on event" pattern without losing streaming visibility,
+the Codex adapter owns an **in-memory message store** at
+`src/backends/codex/store.ts`:
+
+- protocol notifications are folded into canonical `BackendMessage[]`
+  state per session
+- `sessions.messages()` reads from the store (network only on first open
+  or after disconnect)
+- a synthesized `message.updated` event is emitted on every state change,
+  so the chat page's existing OpenCode-style refresh code path picks up
+  the new snapshot via the same `messages()` call
+
+Tool parts produced by the store match the canonical shape consumed by
+`src/pages/chat/parts/ToolPart.tsx`:
+`{ type:'tool', tool:'shell'|'edit', callID, state:{ status, input, output } }`.
+
+Terminal `error` notifications (`willRetry === false`) are folded into a
+synthetic `role:'system'` chat message so the failure shows inline; the
+chat page also clears the thinking indicator on `turn.completed` and on
+the same terminal error event.
 
 ### Phase 5: Add Claude Code
 

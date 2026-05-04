@@ -261,6 +261,31 @@
   box-shadow: 0 16px 30px rgba(36, 38, 33, 0.18);
 }
 
+/* Synthesized client-side bubble for codex turn errors (willRetry=false).
+   Marked separately from regular assistant replies so users can tell at a
+   glance that the turn failed; the bubble is in-memory only and does not
+   survive reconnect, matching codex's own non-persistence of errors. */
+.msg-row--system {
+  align-items: flex-start;
+}
+
+.msg-bubble--error {
+  background: rgba(255, 233, 228, 0.95);
+  border-width: 1px;
+  border-color: rgba(196, 86, 64, 0.45);
+  box-shadow: 0 12px 24px rgba(196, 86, 64, 0.12);
+}
+
+.msg-role--error {
+  color: #b34526;
+}
+
+.msg-text--error {
+  color: #80281a;
+  font-size: 14px;
+  line-height: 21px;
+}
+
 .msg-text--user,
 .msg-text--assistant {
   font-size: 14px;

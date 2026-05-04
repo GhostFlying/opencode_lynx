@@ -26,6 +26,8 @@ import type {
 } from './protocol.js'
 import { createCodexMapper } from './mapper.js'
 import type { CodexMapper } from './mapper.js'
+import { createCodexMessageStore } from './store.js'
+import type { CodexMessageStore, TurnShape as StoreTurnShape } from './store.js'
 import { BackendFacadeError } from '../errors.js'
 import type {
   BackendAgentInfo,
@@ -63,6 +65,8 @@ export interface CreateCodexBackendAdapterOptions {
   /** Inject for tests. */
   createProtocolClient?: (opts: CreateCodexProtocolOptions) => CodexProtocolClient
   createMapper?: () => CodexMapper
+  /** Inject the in-adapter message store (tests). */
+  createStore?: () => CodexMessageStore
   /** Inject openChannel into the protocol client (forwarded). */
   openChannel?: (opts: OpenBackendChannelOptions) => Promise<BackendChannel>
   /** ISO time generator (tests). */
@@ -116,6 +120,20 @@ interface InternalSubscription {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+// Notification params come in two shapes: thread/started carries the
+// session id under `thread.id`; everything else carries it as `threadId`.
+// Used to tag store-driven `message.updated` events so subscribers can
+// filter by their currently-open session.
+function extractSessionIDFromParams(method: string, params: unknown): string | null {
+  if (!isRecord(params)) return null
+  if (method === 'thread/started') {
+    const thread = isRecord(params.thread) ? params.thread : null
+    if (thread && typeof thread.id === 'string') return thread.id
+    return null
+  }
+  return typeof params.threadId === 'string' ? params.threadId : null
 }
 
 function toBackendMessageRole(role: string | undefined): BackendMessageRole {
@@ -220,97 +238,6 @@ function toSessionRecord(thread: ThreadShape): BackendSessionRecord {
   }
 }
 
-interface TurnShape {
-  id?: unknown
-  startedAt?: unknown
-  items?: unknown
-}
-
-interface ItemShape {
-  type?: unknown
-  id?: unknown
-  text?: unknown
-  content?: unknown
-  command?: unknown
-  cwd?: unknown
-  status?: unknown
-  changes?: unknown
-  exitCode?: unknown
-  durationMs?: unknown
-  aggregatedOutput?: unknown
-}
-
-function joinUserInputText(content: unknown): string {
-  if (!Array.isArray(content)) return ''
-  const parts: string[] = []
-  for (const entry of content) {
-    if (isRecord(entry) && entry.type === 'text' && typeof entry.text === 'string') {
-      parts.push(entry.text)
-    }
-  }
-  return parts.join('')
-}
-
-function toBackendMessages(threadId: string, turns: TurnShape[]): BackendMessage[] {
-  const out: BackendMessage[] = []
-  for (const turn of turns) {
-    const turnId = typeof turn.id === 'string' ? turn.id : ''
-    const createdAt = toIsoFromUnixSeconds(turn.startedAt)
-    const items = Array.isArray(turn.items) ? (turn.items as ItemShape[]) : []
-    for (const item of items) {
-      const itemId = typeof item.id === 'string' ? item.id : ''
-      const id = `${turnId}:${itemId}`
-      const itemType = typeof item.type === 'string' ? item.type : ''
-
-      let role: BackendMessageRole
-      let parts: ReadonlyArray<Record<string, unknown>>
-      if (itemType === 'userMessage') {
-        role = 'user'
-        parts = [{ type: 'text', text: joinUserInputText(item.content) }]
-      } else if (itemType === 'agentMessage') {
-        role = 'assistant'
-        parts = [
-          {
-            type: 'text',
-            text: typeof item.text === 'string' ? item.text : '',
-            partID: itemId,
-          },
-        ]
-      } else if (itemType === 'commandExecution' || itemType === 'fileChange') {
-        role = 'tool'
-        const toolPart: Record<string, unknown> = {
-          type: 'tool',
-          kind: itemType,
-        }
-        if (item.command !== undefined) toolPart.command = item.command
-        if (item.cwd !== undefined) toolPart.cwd = item.cwd
-        if (item.status !== undefined) toolPart.status = item.status
-        if (item.changes !== undefined) toolPart.changes = item.changes
-        if (item.exitCode !== undefined) toolPart.exitCode = item.exitCode
-        if (item.durationMs !== undefined) toolPart.durationMs = item.durationMs
-        if (item.aggregatedOutput !== undefined) toolPart.aggregatedOutput = item.aggregatedOutput
-        parts = [toolPart]
-      } else {
-        // Reasoning, plan, MCP tool calls, dynamic tool calls, web search,
-        // image view/generation, review-mode toggles, context compaction,
-        // hook prompts, collab agent calls — pass through as raw v1.
-        role = 'system'
-        parts = [{ type: 'raw', item }]
-      }
-
-      const message: BackendMessage = {
-        id,
-        sessionID: threadId,
-        role,
-        parts,
-        ...(createdAt !== undefined ? { createdAt } : {}),
-      }
-      out.push(message)
-    }
-  }
-  return out
-}
-
 interface ModelShape {
   id?: unknown
   displayName?: unknown
@@ -399,9 +326,16 @@ export function createCodexBackendAdapter(
   const createProtocolClient =
     options.createProtocolClient ?? createCodexProtocolClient
   const createMapper = options.createMapper ?? createCodexMapper
+  const createStore = options.createStore ?? createCodexMessageStore
   const openChannel = options.openChannel ?? openBackendChannel
 
   const mapper = createMapper()
+  // In-adapter message store: folds streaming events into canonical
+  // BackendMessage[] state. `sessions.messages()` reads from here; the
+  // protocol fan-out below pushes a synthesized `message.updated` event
+  // every time the store mutates so chat refreshes through its existing
+  // OpenCode-style refresh-on-event path.
+  const store = createStore()
 
   // Approval correlation is shared across all subscriptions of this adapter.
   const pendingApprovals = new Map<string, PendingApprovalEntry>()
@@ -436,7 +370,25 @@ export function createCodexBackendAdapter(
     protocolListenersAttached = true
 
     unsubProtoNotification = client.onNotification(({ method, params }) => {
+      // Fold first; if state changed, append a synthesized message.updated
+      // so the chat refresh-on-event path picks up the new snapshot. The
+      // sentinel carries the sessionID extracted from the same params shape
+      // the store uses, so subscribers can filter by their active session.
+      const storeChanged = store.apply(method, params)
       const events = mapper.mapNotification(method, params)
+      if (storeChanged) {
+        const sessionID = extractSessionIDFromParams(method, params)
+        if (sessionID) {
+          events.push({
+            backend: 'codex',
+            type: 'message.updated',
+            payload: { source: 'codex.store', method },
+            raw: params,
+            sourceType: method,
+            sessionID,
+          })
+        }
+      }
       if (events.length === 0) return
       for (const sub of [...subscriptions]) {
         if (!sub.started || sub.stopped) continue
@@ -508,6 +460,10 @@ export function createCodexBackendAdapter(
         state.status === 'closed'
       ) {
         mapper.reset()
+        // Drop store too: the codex protocol replays no history on reconnect
+        // and we don't want stale in-flight items lingering. The next
+        // `sessions.messages()` call re-bootstraps from `thread/turns/list`.
+        store.reset()
         if (pendingApprovals.size > 0) {
           pendingApprovals.clear()
         }
@@ -647,12 +603,22 @@ export function createCodexBackendAdapter(
 
     async messages(sessionID: string, _scope?: BackendScope): Promise<BackendMessage[]> {
       void _scope
+      // Hot path: store already has this session (either seeded earlier or
+      // accumulated from notifications). Return a defensive snapshot — this
+      // is the path taken on every `message.updated` refresh, so it must
+      // not round-trip the network.
+      const cached = store.snapshot(sessionID)
+      if (cached) return cached
+      // Cold path: bootstrap from the server. `thread/turns/list` returns
+      // completed turns only, which is fine for first-open: anything still
+      // in-flight will land via notifications and fold into the store from
+      // here on.
       const client = ensureProtocol()
-      const response = await client.request<{ data: TurnShape[] }>('thread/turns/list', {
+      const response = await client.request<{ data: StoreTurnShape[] }>('thread/turns/list', {
         threadId: sessionID,
       })
       const turns = Array.isArray(response?.data) ? response.data : []
-      return toBackendMessages(sessionID, turns)
+      return store.seedFromTurns(sessionID, turns)
     },
 
     async prompt(
@@ -685,9 +651,14 @@ export function createCodexBackendAdapter(
       if (typeof input.reasoningEffort === 'string' && input.reasoningEffort.length > 0) {
         params.effort = input.reasoningEffort
       }
-      const response = await client.request<{ turn: TurnShape }>('turn/start', params)
+      const response = await client.request<{ turn: StoreTurnShape }>('turn/start', params)
       const turn = response?.turn
       const turnId = isRecord(turn) && typeof turn.id === 'string' ? turn.id : undefined
+      // Don't mirror the user prompt into the store here — codex echoes
+      // it back as an `item/started` userMessage during the turn, which
+      // the store accepts as the authoritative copy. Faking it on the
+      // client would either duplicate (if echo dedup misses) or diverge
+      // (if codex shapes the content differently from what we sent).
       return {
         sessionID,
         ...(turnId !== undefined ? { messageID: turnId } : {}),

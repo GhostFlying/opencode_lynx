@@ -30,6 +30,8 @@ import { PickerOverlay } from './PickerOverlay.js'
 import type { PickerOption } from './PickerOverlay.js'
 import {
   errorMessageFromBackendEvent,
+  isRetryingBackendEvent,
+  isTerminalErrorBackendEvent,
   shouldRefreshMessagesForBackendEvent,
   shouldStopThinkingForBackendEvent,
 } from './backend-events.js'
@@ -230,6 +232,11 @@ export function App() {
   const [error, setError] = useState<string | null>(null)
   const [fixtureMode, setFixtureMode] = useState(false)
   const [sending, setSending] = useState(false)
+  // Codex's `error` notifications pulse on every retry attempt before a turn
+  // either succeeds or terminally fails. Counting them locally lets the
+  // thinking shell text show "Retrying… N" without needing the server to
+  // send an attempt counter (the protocol doesn't, today).
+  const [retryAttempt, setRetryAttempt] = useState(0)
   const [providersCatalog, setProvidersCatalog] = useState<BackendProviderInfo[]>([])
   const [agentsCatalog, setAgentsCatalog] = useState<BackendAgentInfo[]>([])
   const [providerDefaults, setProviderDefaults] = useState<Record<string, string>>({})
@@ -505,6 +512,13 @@ export function App() {
       onEvent: (event) => {
         if (event.sessionID && event.sessionID !== sessionId) return
 
+        // Mid-flight retry pulse from codex: keep thinking on, bump the
+        // attempt counter so the indicator text reflects what's happening.
+        if (isRetryingBackendEvent(event)) {
+          setRetryAttempt((prev) => prev + 1)
+          return
+        }
+
         if (shouldRefreshMessagesForBackendEvent(event)) {
           refreshMessages(false)
           return
@@ -512,7 +526,13 @@ export function App() {
 
         if (shouldStopThinkingForBackendEvent(event)) {
           updateSending(false)
+          setRetryAttempt(0)
           if (event.sourceType === 'session.idle') {
+            refreshMessages(false)
+          }
+          if (isTerminalErrorBackendEvent(event)) {
+            // The codex store has already inserted a system-message bubble
+            // with the error text; pull it via refresh so it shows inline.
             refreshMessages(false)
           }
           return
@@ -520,6 +540,7 @@ export function App() {
 
         if (event.type === 'raw' && event.sourceType === 'session.error') {
           updateSending(false)
+          setRetryAttempt(0)
           setError(errorMessageFromBackendEvent(event))
         }
       },
@@ -673,6 +694,7 @@ export function App() {
       }
 
       updateSending(true)
+      setRetryAttempt(0)
       try {
         const directory = pendingDirectory.trim()
         const created = await client.sessions.create(
@@ -716,6 +738,7 @@ export function App() {
     if (!client) return
 
     updateSending(true)
+    setRetryAttempt(0)
     // Fire-and-forget: OpenCode prompt completion can block until the full
     // response. Unified backend events drive progressive UI refreshes.
     const payload = buildPayload()
@@ -981,6 +1004,11 @@ export function App() {
                         role={msg.role ?? 'assistant'}
                         parts={msg.parts}
                         createdAt={msg.createdAt}
+                        kind={
+                          typeof msg.backendMeta?.kind === 'string'
+                            ? (msg.backendMeta.kind as string)
+                            : undefined
+                        }
                       />
                     </list-item>
                   ))}
@@ -995,7 +1023,11 @@ export function App() {
                           <text className="chat-thinking-dot">●</text>
                           <text className="chat-thinking-dot">●</text>
                           <text className="chat-thinking-dot">●</text>
-                          <text className="chat-thinking-text">Agent is thinking…</text>
+                          <text className="chat-thinking-text">
+                            {retryAttempt > 0
+                              ? `Retrying… ${retryAttempt}`
+                              : 'Agent is thinking…'}
+                          </text>
                         </view>
                       </view>
                     </list-item>
