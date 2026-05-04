@@ -473,6 +473,31 @@ export function createCodexBackendAdapter(
     })
 
     unsubProtoState = client.onConnectionState(state => {
+      // Disconnect cleanup: when the channel goes down (or starts a reconnect
+      // cycle) the protocol layer rejects in-flight pending requests and
+      // outstanding server requests internally, but doesn't notify the
+      // adapter. Mirror that here so:
+      //   - FIX-2: mapper open-item map doesn't leak across reconnects, which
+      //     would otherwise misroute outputDelta to a stale item kind.
+      //   - FIX-3: pendingApprovals doesn't grow monotonically and reuse
+      //     stale ids across reconnects. We deliberately do NOT emit
+      //     `approval.resolved` for the cleared entries — those approvals
+      //     were never resolved (the server is gone), so emitting resolved
+      //     would lie to subscribers.
+      // Reset on `reconnecting` covers both `closed` and `failed` paths
+      // because the protocol cycles through reconnecting on either before
+      // settling. We additionally reset on terminal `failed`/`closed` for
+      // the empty-retry-schedule path that skips reconnecting.
+      if (
+        state.status === 'reconnecting' ||
+        state.status === 'failed' ||
+        state.status === 'closed'
+      ) {
+        mapper.reset()
+        if (pendingApprovals.size > 0) {
+          pendingApprovals.clear()
+        }
+      }
       const snapshot = toBackendConnectionSnapshot(state)
       for (const sub of [...subscriptions]) {
         sub.lastSnapshot = snapshot
@@ -544,9 +569,25 @@ export function createCodexBackendAdapter(
     async list(_scope?: BackendScope): Promise<BackendSessionSummary[]> {
       void _scope
       const client = ensureProtocol()
-      const response = await client.request<{ data: ThreadShape[] }>('thread/list', {})
-      const data = Array.isArray(response?.data) ? response.data : []
-      return data.map(toSessionSummary)
+      // Paginate via nextCursor — same SAFETY_CAP pattern as catalog.providers
+      // so a buggy server can't spin us forever (FIX-4).
+      const collected: ThreadShape[] = []
+      let cursor: string | null = null
+      const SAFETY_CAP = 64
+      for (let i = 0; i < SAFETY_CAP; i += 1) {
+        const params: Record<string, unknown> = {}
+        if (cursor !== null) params.cursor = cursor
+        const response = await client.request<{
+          data: ThreadShape[]
+          nextCursor?: string | null
+        }>('thread/list', params)
+        const page = Array.isArray(response?.data) ? response.data : []
+        collected.push(...page)
+        const next = response?.nextCursor
+        if (next === null || next === undefined) break
+        cursor = next
+      }
+      return collected.map(toSessionSummary)
     },
 
     async create(scope?: BackendScope): Promise<BackendSessionRecord> {

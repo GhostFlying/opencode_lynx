@@ -210,7 +210,7 @@ describe('createCodexBackendAdapter / sessions.list', () => {
               ephemeral: true,
             },
           ],
-          nextCursor: 'cursor-not-used',
+          nextCursor: null,
         }
       },
     })
@@ -647,6 +647,114 @@ describe('createCodexBackendAdapter / approvals.respond', () => {
     const bResolved = b.filter(e => e.type === 'approval.resolved')
     expect(aResolved).toHaveLength(1)
     expect(bResolved).toHaveLength(1)
+  })
+})
+
+describe('createCodexBackendAdapter / disconnect cleanup (FIX-2/FIX-3)', () => {
+  // FIX-2: mapper.reset() must be invoked when the connection drops, so the
+  // open-item map doesn't leak across reconnects and misroute outputDelta.
+  it('resets the mapper on a reconnecting state transition', () => {
+    const { client, fake, getMapper } = makeAdapter({})
+    // Subscribe so the adapter attaches the protocol's connection-state
+    // listener (which is the layer that calls mapper.reset()).
+    client.events.subscribe({ onEvent: () => {} })
+    const captured = getMapper()
+    const resetSpy = vi.spyOn(captured, 'reset')
+
+    // Open item — populates the mapper's open-items map.
+    captured.setActiveThread('thread-1')
+    captured.mapNotification('item/started', {
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      item: { id: 'item-1', type: 'commandExecution', command: 'ls', cwd: '/' },
+    })
+
+    // Push a connection-state change — must reset mapper.
+    fake.pushState({ status: 'reconnecting', attempt: 1, reason: 'lost' })
+    expect(resetSpy).toHaveBeenCalled()
+  })
+
+  it('clears pendingApprovals on reconnecting so stale ids cannot be respondTo', async () => {
+    const { client, fake } = makeAdapter({})
+    client.events.subscribe({ onEvent: () => {} })
+
+    // Populate pendingApprovals.
+    const req = makeServerRequest(
+      'item/commandExecution/requestApproval',
+      { threadId: 't', turnId: 'u', itemId: 'i', command: 'x', cwd: '/' },
+      'srv-cleanup',
+    )
+    fake.pushServerRequest(req)
+
+    // Sanity: the entry exists (otherwise respond would already throw).
+    // Push a disconnect — must clear the pendingApprovals map.
+    fake.pushState({ status: 'reconnecting', attempt: 1, reason: 'lost' })
+
+    // FIX-3: trying to respond to a cleared approval must throw "not found"
+    // the same way an unknown approvalID does.
+    await expect(
+      client.approvals!.respond('srv-cleanup', { kind: 'accept' }),
+    ).rejects.toBeInstanceOf(BackendFacadeError)
+  })
+
+  it('also resets on a closed transition (no retry path)', () => {
+    const { client, fake, getMapper } = makeAdapter({})
+    client.events.subscribe({ onEvent: () => {} })
+    const captured = getMapper()
+    const resetSpy = vi.spyOn(captured, 'reset')
+    fake.pushState({ status: 'closed' })
+    expect(resetSpy).toHaveBeenCalled()
+  })
+})
+
+describe('createCodexBackendAdapter / sessions.list pagination (FIX-4)', () => {
+  it('paginates via nextCursor and concatenates pages', async () => {
+    let call = 0
+    const seen: unknown[] = []
+    const { client } = makeAdapter({
+      requestHandler: (method, params) => {
+        if (method !== 'thread/list') throw new Error(`unexpected ${method}`)
+        call += 1
+        seen.push(params)
+        if (call === 1) {
+          return {
+            data: [
+              { id: 't1', preview: 'p1', status: 'idle', updatedAt: 0, cwd: '/' },
+              { id: 't2', preview: 'p2', status: 'idle', updatedAt: 0, cwd: '/' },
+            ],
+            nextCursor: 'p2',
+          }
+        }
+        return {
+          data: [
+            { id: 't3', preview: 'p3', status: 'idle', updatedAt: 0, cwd: '/' },
+          ],
+          nextCursor: null,
+        }
+      },
+    })
+    const summaries = await client.sessions.list()
+    expect(call).toBe(2)
+    expect(seen[0]).toEqual({})
+    expect(seen[1]).toEqual({ cursor: 'p2' })
+    expect(summaries.map(s => s.id)).toEqual(['t1', 't2', 't3'])
+  })
+
+  it('terminates after a single page when nextCursor is null (no spurious extra request)', async () => {
+    let call = 0
+    const { client } = makeAdapter({
+      requestHandler: (method) => {
+        if (method !== 'thread/list') throw new Error(`unexpected ${method}`)
+        call += 1
+        return {
+          data: [{ id: 't1', preview: 'p', status: 'idle', updatedAt: 0, cwd: '/' }],
+          nextCursor: null,
+        }
+      },
+    })
+    const summaries = await client.sessions.list()
+    expect(call).toBe(1)
+    expect(summaries).toHaveLength(1)
   })
 })
 

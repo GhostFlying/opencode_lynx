@@ -133,6 +133,13 @@ interface QueuedRequestSend {
   pending: PendingRequest
   /** Rejects the public promise — used on send failure and on close. */
   rejectPublic(reason: unknown): void
+  /**
+   * Set to true if the public promise was settled (timed out or otherwise
+   * cancelled) before the queue could flush. `flushPreInitQueue()` skips
+   * cancelled entries so the server never sees a frame whose response has
+   * no listener.
+   */
+  cancelled: boolean
 }
 
 interface QueuedNotifySend {
@@ -140,6 +147,7 @@ interface QueuedNotifySend {
   payload: Record<string, unknown>
   resolveAccepted(): void
   rejectPublic(reason: unknown): void
+  cancelled: boolean
 }
 
 export function createCodexProtocolClient(opts: CreateCodexProtocolOptions): CodexProtocolClient {
@@ -546,6 +554,10 @@ export function createCodexProtocolClient(opts: CreateCodexProtocolOptions): Cod
     const queue = preInitQueue
     preInitQueue = []
     for (const item of queue) {
+      // Skip entries whose public promise already settled (e.g. timed out)
+      // before the handshake completed. Sending them now would put a frame
+      // on the wire whose response has no listener — see FIX-1.
+      if (item.cancelled) continue
       if (item.kind === 'notify') {
         channel.send(item.payload).then(item.resolveAccepted, item.rejectPublic)
       } else {
@@ -600,12 +612,19 @@ export function createCodexProtocolClient(opts: CreateCodexProtocolOptions): Cod
       // paths. Id is set at send time (after the handshake) so it sits cleanly
       // after `initialize`'s id on a fresh session.
       let entryId: JsonRpcId | null = null
+      // Holds the queue entry once the request lands in `preInitQueue`. The
+      // timeout handler flips `cancelled` so flushPreInitQueue() drops it
+      // instead of sending a frame whose public promise is already rejected
+      // (FIX-1: pre-init timeout race).
+      let queuedEntry: QueuedRequestSend | null = null
       const timeoutHandle = setTimeout(() => {
         if (entryId !== null) {
           const entry = pending.get(entryId)
           if (entry) {
             pending.delete(entryId)
           }
+        } else if (queuedEntry) {
+          queuedEntry.cancelled = true
         }
         reject(new Error(`timeout: ${method}`))
       }, timeoutMs)
@@ -627,6 +646,7 @@ export function createCodexProtocolClient(opts: CreateCodexProtocolOptions): Cod
         } else if (entry.timeoutHandle !== null) {
           clearTimeout(entry.timeoutHandle)
         }
+        if (queuedEntry) queuedEntry.cancelled = true
         reject(error)
       }
 
@@ -639,13 +659,16 @@ export function createCodexProtocolClient(opts: CreateCodexProtocolOptions): Cod
         if (params !== undefined) frame.params = params
         channel.send(frame as unknown as Record<string, unknown>).catch(removePendingOnFailure)
       } else {
-        preInitQueue.push({
+        const queued: QueuedRequestSend = {
           kind: 'request',
           method,
           params,
           pending: entry,
           rejectPublic: removePendingOnFailure,
-        })
+          cancelled: false,
+        }
+        queuedEntry = queued
+        preInitQueue.push(queued)
       }
     })
   }
@@ -670,6 +693,7 @@ export function createCodexProtocolClient(opts: CreateCodexProtocolOptions): Cod
         payload: frame as unknown as Record<string, unknown>,
         resolveAccepted: resolve,
         rejectPublic: reject,
+        cancelled: false,
       })
     })
   }
