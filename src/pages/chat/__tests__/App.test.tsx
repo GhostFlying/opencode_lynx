@@ -63,7 +63,13 @@ vi.mock('../ChatInput.js', () => ({
     return (
       <view
         className={classNames.join(' ')}
-        bindtap={() => onSend('hello world')}
+        // Honour the disabled prop so a tap on a disabled composer never
+        // fires onSend — matches the real ChatInput which omits the bindtap
+        // wiring on its send button when disabled.
+        bindtap={() => {
+          if (disabled) return
+          onSend('hello world')
+        }}
       />
     )
   },
@@ -822,6 +828,155 @@ describe('Chat App new-session flow', () => {
       }),
     )
     expect(payload.agent).toBeUndefined()
+
+    result.unmount()
+  })
+
+  // Selection-init gating: the very first send on a fresh new-session must
+  // wait for a real selection to seed — without this the prompt payload
+  // would carry FALLBACK_SELECTION, harmless on most OpenCode deployments
+  // but a 100% repro on Codex (no `anthropic` provider).
+  it('keeps composer disabled and never calls prompt while catalog is pending', async () => {
+    setRouteParams({
+      isNewSession: true,
+      connection: {
+        kind: 'codex',
+        host: 'example.com',
+        port: '7777',
+        token: '',
+        secure: false,
+      },
+    })
+
+    const subscription = createSubscription()
+    const promptMock = vi.fn(async () => ({ status: 'sent' }))
+    // providers() returns a promise that never resolves — simulates a slow
+    // server / app foregrounded before catalog finished loading.
+    const providersMock = vi.fn(() => new Promise(() => {}))
+    const codexClient: BackendClient = {
+      descriptor: { kind: 'codex', label: 'Codex' },
+      capabilities: {
+        sessions: true,
+        streaming: true,
+        catalog: true,
+        approvals: true,
+        pty: false,
+        remoteDiscovery: false,
+        agentPicker: false,
+        modelPicker: true,
+      },
+      sessions: {
+        list: vi.fn(),
+        create: vi.fn(),
+        get: vi.fn(),
+        messages: vi.fn(async () => []),
+        prompt: promptMock,
+      } as unknown as BackendClient['sessions'],
+      events: { subscribe: vi.fn(() => subscription) },
+      catalog: {
+        providers: providersMock as unknown as NonNullable<BackendClient['catalog']>['providers'],
+        agents: vi.fn(async () => []),
+      } as unknown as NonNullable<BackendClient['catalog']>,
+    }
+    createCodexBackendClientMock.mockReturnValue(codexClient)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    await waitFor(() => {
+      expect(providersMock).toHaveBeenCalled()
+    })
+
+    const composer = result.container.querySelector('.composer-stub')
+    expect(composer?.className).toContain('composer-stub--disabled')
+    expect(composer?.className).toContain('composer-stub--model-Loading…')
+
+    fireEvent.tap(composer!)
+
+    // Give any pending microtasks a chance to flush, then assert prompt
+    // was never reached. waitFor would only succeed for the *positive*
+    // case; here we want to assert a steady-state negative.
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(promptMock).not.toHaveBeenCalled()
+
+    result.unmount()
+  })
+
+  it('enables composer once the catalog seeds the selection', async () => {
+    setRouteParams({
+      isNewSession: true,
+      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    })
+    const harness = createFakeChatClient()
+    createBackendClientMock.mockReturnValue(harness.client)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    await waitFor(() => {
+      const composer = result.container.querySelector('.composer-stub')
+      expect(composer?.className).toContain('composer-stub--enabled')
+    })
+    const composer = result.container.querySelector('.composer-stub')
+    expect(composer?.className).not.toContain('composer-stub--model-Loading…')
+
+    result.unmount()
+  })
+
+  it('surfaces a catalog-fetch error when nothing has seeded selection', async () => {
+    setRouteParams({
+      isNewSession: true,
+      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    })
+    const promptMock = vi.fn()
+    const providersMock = vi.fn(async () => {
+      throw new Error('Network unreachable')
+    })
+    const harness = createFakeChatClient({ prompt: promptMock })
+    ;(harness.client.catalog!.providers as unknown as ReturnType<typeof vi.fn>) = providersMock
+    createBackendClientMock.mockReturnValue(harness.client)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    await waitFor(() => {
+      expect(result.queryByText(/Failed to load model catalog/)).not.toBeNull()
+    })
+    // The composer stays mounted (it lives outside the chat-state branch),
+    // but must remain disabled because no selection ever seeded.
+    const composer = result.container.querySelector('.composer-stub')
+    expect(composer?.className).toContain('composer-stub--disabled')
+    fireEvent.tap(composer!)
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(promptMock).not.toHaveBeenCalled()
+
+    result.unmount()
+  })
+
+  it('enables composer immediately when storage has a full stored selection', async () => {
+    setRouteParams({
+      sessionId: 'session-stored-1',
+      connection: { ip: '10.0.0.1', port: '4567', password: 'pw' },
+    })
+    storageGetMock.mockResolvedValueOnce(JSON.stringify({
+      agent: 'build',
+      providerID: 'anthropic',
+      modelID: 'claude-sonnet-4-20250514',
+      variant: null,
+    }))
+    // Make catalog hang — composer should still enable from storage alone.
+    const providersMock = vi.fn(() => new Promise(() => {}))
+    const harness = createFakeChatClient()
+    ;(harness.client.catalog!.providers as unknown as ReturnType<typeof vi.fn>) = providersMock
+    createBackendClientMock.mockReturnValue(harness.client)
+
+    const { App: ChatApp } = await import('../App.js')
+    const result = render(<ChatApp />)
+
+    await waitFor(() => {
+      const composer = result.container.querySelector('.composer-stub')
+      expect(composer?.className).toContain('composer-stub--enabled')
+    })
 
     result.unmount()
   })
