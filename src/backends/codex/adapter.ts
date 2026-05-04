@@ -169,13 +169,27 @@ interface ThreadShape {
   ephemeral?: unknown
 }
 
+// Codex's `Thread.preview` is the full first user message (per protocol docs:
+// "Usually the first user message in the thread"). Used unbounded as a title
+// fallback it can be many KB long. Cap to first line + a sane character
+// budget so list rows / chat headers stay readable until Codex's async
+// auto-summarizer (`thread/name/updated`) lands.
+const PREVIEW_TITLE_MAX_CHARS = 80
+
+function truncatePreviewForTitle(preview: string): string | undefined {
+  const firstLine = preview.split(/\r?\n/, 1)[0]?.trim() ?? ''
+  if (firstLine.length === 0) return undefined
+  if (firstLine.length <= PREVIEW_TITLE_MAX_CHARS) return firstLine
+  return `${firstLine.slice(0, PREVIEW_TITLE_MAX_CHARS - 1).trimEnd()}…`
+}
+
 function toSessionSummary(thread: ThreadShape): BackendSessionSummary {
   const id = typeof thread.id === 'string' ? thread.id : ''
   const titleSource =
     typeof thread.name === 'string' && thread.name.length > 0
       ? thread.name
       : typeof thread.preview === 'string'
-        ? thread.preview
+        ? truncatePreviewForTitle(thread.preview)
         : undefined
   const status = thread.status !== undefined ? String(thread.status) : undefined
   const updatedAt = toIsoFromUnixSeconds(thread.updatedAt)

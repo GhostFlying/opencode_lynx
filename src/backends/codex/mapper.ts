@@ -144,6 +144,22 @@ export function createCodexMapper(opts?: CreateCodexMapperOptions): CodexMapper 
           ),
         ]
       }
+      case 'thread/name/updated': {
+        // Codex auto-summarizes threads asynchronously and pushes the result
+        // here. Without this branch the chat UI keeps showing the long
+        // first-message preview as the title forever.
+        const threadID = typeof p.threadId === 'string' ? p.threadId : undefined
+        const name = typeof p.threadName === 'string' ? p.threadName : undefined
+        return [
+          makeEvent(
+            'session.updated',
+            method,
+            params,
+            { threadID, name },
+            { sessionID: threadID },
+          ),
+        ]
+      }
       case 'turn/started': {
         const threadID = typeof p.threadId === 'string' ? p.threadId : undefined
         const turn = p.turn as { id?: string } | undefined

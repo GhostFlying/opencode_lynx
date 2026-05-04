@@ -54,6 +54,28 @@ describe('createCodexMapper / mapNotification', () => {
     expect(event!.raw).toBe(params)
   })
 
+  it('maps thread/name/updated → session.updated with name payload', () => {
+    const mapper = makeMapper()
+    const params = { threadId: 'thread-7', threadName: 'Refactor auth flow' }
+    const events = mapper.mapNotification('thread/name/updated', params)
+    expect(events).toHaveLength(1)
+    const event = events[0]!
+    expect(event.type).toBe('session.updated')
+    expect(event.sessionID).toBe('thread-7')
+    expect(event.payload).toEqual({ threadID: 'thread-7', name: 'Refactor auth flow' })
+    expect(event.sourceType).toBe('thread/name/updated')
+    expect(event.raw).toBe(params)
+  })
+
+  it('thread/name/updated without threadName still emits session.updated (name undefined)', () => {
+    const mapper = makeMapper()
+    const params = { threadId: 'thread-7' }
+    const [event] = mapper.mapNotification('thread/name/updated', params)
+    expect(event!.type).toBe('session.updated')
+    expect(event!.sessionID).toBe('thread-7')
+    expect(event!.payload).toEqual({ threadID: 'thread-7', name: undefined })
+  })
+
   it('maps turn/started → turn.started with turn id', () => {
     const mapper = makeMapper()
     const turn = { id: 'turn-1', items: [], status: 'running' }
