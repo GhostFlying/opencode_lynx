@@ -4,11 +4,11 @@ This file is for coding agents working in this repository.
 
 ## Repository Purpose and Current Direction
 
-This repository is a Lynx-based OpenCode mobile client workspace for iOS and Android.
+This repository is a Lynx-based mobile client workspace for AI coding-agent backends, targeting iOS and Android.
 
 It ships a Lynx app scaffold with a custom container layer that integrates the Lynx SDK directly.
 
-The client connects to a remote OpenCode server and supports session management, prompt submission with streamed assistant output, and real-time status updates. The API surface (REST, SSE, optional WebSocket/PTY) is documented under `./docs/`.
+The client connects to a remote backend and supports session management, prompt submission with streamed assistant output, real-time status updates, and (for Codex) approval round-trips. Two backend kinds are shipped today: **OpenCode** (REST + SSE, optional WebSocket/PTY) and **Codex** (`codex app-server` JSON-RPC 2.0 over WebSocket via `backend.channel.*`). Claude Code is declared but unimplemented. The full API surface is documented under `./docs/`.
 
 Today, the repo contains both:
 
@@ -25,9 +25,12 @@ Before doing any Lynx-related task in this repository, you **MUST** read these r
 2. Project-local Lynx guide: `./docs/lynx-vs-web.md`
 3. The relevant task-specific docs under `./docs/` for the work you are about to do
 
-Then, for OpenCode mobile client architecture or API integration tasks, also read:
+Then, depending on the area you are touching, also read:
 
-4. `./docs/opencode-mobile-client-reference.md`
+4. `./docs/opencode-mobile-client-reference.md` — OpenCode REST / SSE / PTY surface
+5. `./docs/multi-backend-client-plan.md` — provider-neutral backend layer (`src/backends/`) used by both OpenCode and Codex
+6. `./docs/codex-smoke-recipe.md` — manual end-to-end smoke recipe for the Codex backend
+7. `./docs/network-bridge-api-spec.md` — native bridge wire contract, including `backend.channel.*` for Codex
 
 Examples of task-specific docs that must be read before starting work:
 
