@@ -8,10 +8,10 @@
 #import <Lynx/LynxContext.h>
 #import "OpenCodeLynx-Swift.h"
 
-static NSInteger const kCodeSucceeded = 1;
-static NSInteger const kCodeFailed = 0;
+// Success/failure/no-handler codes are owned by `OpenCodeBridgeDispatcher`
+// in Swift; only the invalid-param code is used directly from this file
+// (for the early-return when the JS caller passes an empty method name).
 static NSInteger const kCodeInvalidParam = -3;
-static NSInteger const kCodeNoHandler = -2;
 
 @interface OpenCodeBridgeModule ()
 @property (nonatomic, weak) LynxContext *lynxContext;
