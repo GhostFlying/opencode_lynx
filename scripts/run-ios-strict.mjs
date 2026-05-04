@@ -21,7 +21,9 @@ async function run(command, args, options = {}) {
 }
 
 function findBootedSimulator(output) {
-  const match = output.match(/([A-F0-9-]{36})\s+\(Booted\)/i)
+  // simctl prints `Name (UDID) (Booted)` so there's a `)` between UDID and
+  // the (Booted) marker — match a UDID followed by `)` + whitespace.
+  const match = output.match(/([A-F0-9-]{36})\)\s+\(Booted\)/i)
   return match?.[1] ?? null
 }
 
