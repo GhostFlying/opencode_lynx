@@ -179,15 +179,33 @@ function selectionStorageKey(sessionId: string): string {
   return `chat-selection-${sessionId}`
 }
 
+// Defensive guard against malformed or migration-drifted blobs in native
+// storage. We only accept a value if every present field has the expected
+// type — anything else falls back to defaults via `null`. This deliberately
+// stays narrow (FIX-5): a well-formed blob is preserved exactly as before.
+function isStoredChatSelection(value: unknown): value is Partial<ChatSelection> {
+  if (!isRecord(value)) return false
+  if (Array.isArray(value)) return false
+  const v = value as Record<string, unknown>
+  if ('agent' in v && typeof v.agent !== 'string') return false
+  if ('providerID' in v && typeof v.providerID !== 'string') return false
+  if ('modelID' in v && typeof v.modelID !== 'string') return false
+  if ('variant' in v && v.variant !== null && typeof v.variant !== 'string') return false
+  return true
+}
+
 async function loadStoredSelection(sessionId: string): Promise<Partial<ChatSelection> | null> {
   if (!sessionId) return null
   const raw = await storageGet(selectionStorageKey(sessionId))
   if (!raw) return null
+  let parsed: unknown
   try {
-    return JSON.parse(raw) as Partial<ChatSelection>
+    parsed = JSON.parse(raw)
   } catch {
     return null
   }
+  if (!isStoredChatSelection(parsed)) return null
+  return parsed
 }
 
 function saveStoredSelection(sessionId: string, selection: ChatSelection): void {
