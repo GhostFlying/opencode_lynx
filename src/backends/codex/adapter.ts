@@ -249,11 +249,15 @@ interface ModelShape {
 }
 
 function reasoningEffortLabel(option: unknown): string {
+  // Real shape (codex app-server v2 ts-rs binding):
+  //   { reasoningEffort: "none"|"minimal"|"low"|"medium"|"high"|"xhigh", description: string }
+  // Older/internal forms have used `{ kind: ... }` and bare strings, so accept those too.
   if (typeof option === 'string') return option
   if (isRecord(option)) {
+    if (typeof option.reasoningEffort === 'string') return option.reasoningEffort
     if (typeof option.kind === 'string') return option.kind
   }
-  return String(option)
+  return ''
 }
 
 function toProviderCatalog(models: ModelShape[]): BackendProviderCatalog {
@@ -262,7 +266,9 @@ function toProviderCatalog(models: ModelShape[]): BackendProviderCatalog {
     name: 'Codex',
     models: models.map(model => {
       const reasoningEfforts = Array.isArray(model.supportedReasoningEfforts)
-        ? model.supportedReasoningEfforts.map(reasoningEffortLabel)
+        ? model.supportedReasoningEfforts
+            .map(reasoningEffortLabel)
+            .filter((label): label is string => label.length > 0)
         : []
       const id = typeof model.id === 'string' ? model.id : ''
       const name = typeof model.displayName === 'string' ? model.displayName : id

@@ -88,6 +88,8 @@ export function SettingsView({
             errorMessage={errorMessage}
             primaryLabel="Reconnect"
             secondaryLabel="Disconnect"
+            kindSwitchDisabled={connectionTag === 'Online' || connectionTag === 'Connecting'}
+            kindSwitchDisabledHint="Disconnect first to switch backends."
             onChange={onChange}
             onPrimaryAction={handleReconnect}
             onSecondaryAction={handleDisconnect}

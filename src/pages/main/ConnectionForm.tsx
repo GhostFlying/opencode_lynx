@@ -19,6 +19,12 @@ export interface ConnectionFormProps {
   primaryLabel: string
   secondaryLabel?: string
   compact?: boolean
+  // Locks the OpenCode/Codex pill switch and shows a hint. Settings sets this
+  // while a connection is open or in flight, so the user must explicitly
+  // disconnect before changing backends instead of silently overwriting the
+  // saved connection by tapping the other pill.
+  kindSwitchDisabled?: boolean
+  kindSwitchDisabledHint?: string
   onChange: (next: ConnectionContext) => void
   onPrimaryAction: () => void
   onSecondaryAction?: () => void
@@ -26,40 +32,44 @@ export interface ConnectionFormProps {
 
 interface KindSelectorProps {
   activeKind: BackendKindLabel
+  disabled: boolean
   onSelectKind: (kind: BackendKindLabel) => void
 }
 
-function pillClassName(active: boolean): string {
-  return active
-    ? 'connection-kind__pill connection-kind__pill--active'
-    : 'connection-kind__pill'
+function pillClassName(active: boolean, disabled: boolean): string {
+  const classes = ['connection-kind__pill']
+  if (active) classes.push('connection-kind__pill--active')
+  if (disabled && !active) classes.push('connection-kind__pill--disabled')
+  return classes.join(' ')
 }
 
-function KindSelector({ activeKind, onSelectKind }: KindSelectorProps) {
+function KindSelector({ activeKind, disabled, onSelectKind }: KindSelectorProps) {
   const handleOpencodeTap = useCallback(() => {
     'background only'
+    if (disabled) return
     if (activeKind !== 'opencode') {
       onSelectKind('opencode')
     }
-  }, [activeKind, onSelectKind])
+  }, [activeKind, disabled, onSelectKind])
 
   const handleCodexTap = useCallback(() => {
     'background only'
+    if (disabled) return
     if (activeKind !== 'codex') {
       onSelectKind('codex')
     }
-  }, [activeKind, onSelectKind])
+  }, [activeKind, disabled, onSelectKind])
 
   return (
     <view className="connection-kind">
       <view
-        className={pillClassName(activeKind === 'opencode')}
+        className={pillClassName(activeKind === 'opencode', disabled)}
         bindtap={handleOpencodeTap}
       >
         <text className="connection-kind__label">OpenCode</text>
       </view>
       <view
-        className={pillClassName(activeKind === 'codex')}
+        className={pillClassName(activeKind === 'codex', disabled)}
         bindtap={handleCodexTap}
       >
         <text className="connection-kind__label">Codex</text>
@@ -75,6 +85,8 @@ export function ConnectionForm({
   primaryLabel,
   secondaryLabel,
   compact = false,
+  kindSwitchDisabled = false,
+  kindSwitchDisabledHint,
   onChange,
   onPrimaryAction,
   onSecondaryAction,
@@ -165,7 +177,14 @@ export function ConnectionForm({
 
   return (
     <view className={containerClass}>
-      <KindSelector activeKind={connection.kind} onSelectKind={handleSelectKind} />
+      <KindSelector
+        activeKind={connection.kind}
+        disabled={kindSwitchDisabled}
+        onSelectKind={handleSelectKind}
+      />
+      {kindSwitchDisabled && kindSwitchDisabledHint ? (
+        <text className="connection-kind__hint">{kindSwitchDisabledHint}</text>
+      ) : null}
 
       {isOpencodeConnection(connection) ? (
         <>

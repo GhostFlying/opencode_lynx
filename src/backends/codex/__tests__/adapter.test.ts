@@ -945,7 +945,10 @@ describe('createCodexBackendAdapter / catalog.providers', () => {
                 hidden: false,
                 isDefault: true,
                 defaultReasoningEffort: 'medium',
-                supportedReasoningEfforts: [{ kind: 'minimal' }, { kind: 'medium' }],
+                supportedReasoningEfforts: [
+                  { reasoningEffort: 'minimal', description: 'fast' },
+                  { reasoningEffort: 'medium', description: 'balanced' },
+                ],
               },
             ],
             nextCursor: 'page-2',
